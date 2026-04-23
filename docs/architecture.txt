@@ -1,0 +1,24 @@
+|-- src/
+|   |-- core/
+|   |   |-- engine.py
+|   |   |-- constants.py
+|   |
+|   |-- envs/
+|   |   |-- snake_env.py
+|   |
+|   |-- agents/
+|   |   |-- base_agent.py   # Abstract class
+|   |   |-- human_agent.py
+|   |   |-- q_table_agent.py
+|   |   |-- neat_agent.py
+|   |
+|   |-- playing/
+|   |   |-- trainer.py      # Orchestrates
+|   |   |-- logger.py
+|   |   |-- session.py
+|   |
+|   |-- ui/
+|   |   |-- renderer.py
+|   |   |-- dashboard.py
+|
+|-- main.py
