@@ -1,6 +1,7 @@
 import pygame
 
 from ui.renderer import Renderer
+from ui.input_handler import InputHandler
 
 FRAME_RATE = 20
 FRAME_TIME = 1.0 / FRAME_RATE
@@ -14,7 +15,8 @@ def initialize_system():
     pygame.display.set_caption("SnAIke")
     clock = pygame.time.Clock()
 
-    renderer = Renderer(screen, clock, SCREEN_HEIGHT, SCREEN_WIDTH, SCALE_RATIO)    
+    input_handler = InputHandler()
+    renderer = Renderer(screen, clock, SCREEN_HEIGHT, SCREEN_WIDTH, SCALE_RATIO, input_handler)   
     return screen, clock, renderer
 
 def shutdown():
