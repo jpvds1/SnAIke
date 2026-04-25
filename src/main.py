@@ -1,18 +1,12 @@
-from enum import Enum, auto
 import pygame
 
 from ui.renderer import Renderer
 
 FRAME_RATE = 20
 FRAME_TIME = 1.0 / FRAME_RATE
-SCALE_RATIO = 1
-SCREEN_WIDTH = 500
-SCREEN_HEIGHT = 500
-
-class State(Enum):
-    MENU     = auto()
-    PLAYING  = auto() # Human or AI player
-    TRAINING = auto()
+SCALE_RATIO = 4
+SCREEN_WIDTH = 200
+SCREEN_HEIGHT = 200
 
 def initialize_system():
     pygame.init()
@@ -20,14 +14,13 @@ def initialize_system():
     pygame.display.set_caption("SnAIke")
     clock = pygame.time.Clock()
 
-    renderer = Renderer(screen, clock)
-    state = State.MENU
-    return screen, clock, renderer, state
+    renderer = Renderer(screen, clock, SCREEN_HEIGHT, SCREEN_WIDTH, SCALE_RATIO)    
+    return screen, clock, renderer
 
 def shutdown():
     pygame.quit()
 
-def state_machine(state, renderer):
+def main_loop(renderer):
     running = True
     while(running):
         config = renderer.render_menu()
@@ -37,8 +30,8 @@ def state_machine(state, renderer):
             continue
 
 def main():
-    screen, clock, renderer, state = initialize_system()
-    state_machine(state, renderer)
+    screen, clock, renderer = initialize_system()
+    main_loop(renderer)
     shutdown()
 
 if __name__ == "__main__":
