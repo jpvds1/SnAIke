@@ -1,5 +1,5 @@
 import random
-from snake import Direction, Snake, _is_opposite
+from core.snake import Direction, Snake, _is_opposite
 
 REWARD_APPLE     =  1.0
 REWARD_DEATH     = -1.0

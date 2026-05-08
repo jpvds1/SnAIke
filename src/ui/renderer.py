@@ -127,7 +127,7 @@ class Renderer:
     def render_menu(self) -> dict:
         choosing = True
         while(choosing):
-            actions = self.input_handler.get_actions()
+            actions = self.input_handler.process_events()
             if actions["QUIT"] or self.menu_state == MenuState.QUIT:
                 return {"QUIT": True}
 

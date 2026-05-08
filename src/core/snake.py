@@ -26,7 +26,7 @@ class Snake:
     def move(self, direction: Direction | None = None, apple: bool = False):
         if direction == None:
             direction = self.head.direction
-        if _is_opposite(direction, head.direction):
+        if _is_opposite(direction, self.head.direction):
             direction = self.head.direction
 
         x, y = self.head.position
