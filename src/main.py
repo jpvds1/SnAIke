@@ -7,7 +7,6 @@ from playing.session import Session
 from agents.human_agent import HumanAgent
 
 FRAME_RATE = 10
-FRAME_TIME = 1.0 / FRAME_RATE
 SCALE_RATIO = 4
 SCREEN_WIDTH = 200
 SCREEN_HEIGHT = 200
@@ -52,7 +51,8 @@ def main_loop(renderer, clock, input_handler):
             env=env,
             input_handler=input_handler,
             clock=clock,
-            frame_rate=FRAME_RATE
+            frame_rate=FRAME_RATE,
+            render_fn=renderer.render_game
         )
 
         result = session.run()

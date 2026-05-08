@@ -1,9 +1,21 @@
 from enum import Enum, auto
 import pygame
 
+# Menu palette
 BUTTON_COLOR = (209, 0, 0)
 BUTTON_HOVER_COLOR = (255, 0, 0)
 SELECTOR_COLOR = (0, 0, 150)
+
+# Game palette
+COLOR_BG         = ( 18,  18,  18)
+COLOR_GRID       = ( 38,  38,  38)
+COLOR_SNAKE_HEAD = ( 80, 255, 120)
+COLOR_SNAKE_BODY = ( 30, 160,  60)
+COLOR_APPLE      = (220,  50,  50)
+COLOR_HUD        = (220, 220, 220)
+ 
+CELL_PAD = 2
+
 
 class MenuState(Enum):
     MAIN             = auto()
@@ -12,17 +24,20 @@ class MenuState(Enum):
     TRAIN_CONFIG     = auto()
     QUIT             = auto()
 
+
 class Renderer:
     def __init__(self, screen, clock, u_height, u_width, scale_ratio, input_handler):
         self.screen = screen
         self.clock = clock
         self.height = u_height * scale_ratio
         self.width = u_width * scale_ratio
+        self.scale_ratio = scale_ratio
         self.input_handler = input_handler
 
         self.menu_state = MenuState.MAIN
 
         self.font = pygame.font.Font(None, 10 * scale_ratio)
+        self.hud_font = pygame.font.Font(None, 6 * scale_ratio)
 
         self.controllers = ["Human", "Genetic Algorithm", "NEAT", "Q-Learning"]
         self.play_selector = Selector(self.controllers)
@@ -80,6 +95,55 @@ class Renderer:
         if right_hovered and mouse_click:
             selector.next()
 
+    # -------------------------------------------
+    # Game Rendering
+    # -------------------------------------------
+
+    def render_game(self, state: dict) -> None:
+        board_w, board_h = state["board_size"]
+        cell_w = self.width // board_w
+        cell_h = self.height // board_h
+
+        self._draw_background(board_w, board_h, cell_w, cell_h)
+        self._draw_apple(state["apple"], cell_w, cell_h)
+        self._draw_snake(state["snake_positions"], cell_w, cell_h)
+        self._draw_hud(state["score"], state["steps"])
+
+        pygame.display.flip()
+
+    def _draw_background(self, board_w, board_h, cell_w, cell_h):
+        self.screen.fill(COLOR_BG)
+        for gx in range(board_w):
+            for gy in range(board_h):
+                rect = pygame.Rect(gx * cell_w, gy * cell_h, cell_w, cell_h)
+                pygame.draw.rect(self.screen, COLOR_GRID, rect, 1)
+
+    def _draw_apple(self, apple, cell_w, cell_h):
+        if apple is None:
+            return
+        ax, ay = apple
+        rect = pygame.Rect(
+            ax * cell_w + CELL_PAD,
+            ay * cell_h + CELL_PAD,
+            cell_w - CELL_PAD * 2,
+            cell_h - CELL_PAD * 2
+        )
+        pygame.draw.ellipse(self.screen, COLOR_APPLE, rect)
+
+    def _draw_snake(self, positions, cell_w, cell_h):
+        for i, (gx, gy) in enumerate(positions):
+            color = COLOR_SNAKE_HEAD if i == 0 else COLOR_SNAKE_BODY
+            rect = pygame.Rect(
+                gx * cell_w + CELL_PAD,
+                gy * cell_h + CELL_PAD,
+                cell_w - CELL_PAD * 2,
+                cell_h - CELL_PAD * 2
+            )
+            pygame.draw.rect(self.screen, color, rect, border_radius=4)
+
+    def _draw_hud(self, score: int, steps: int):
+        surf = self.hud_font.render(f"Score: {score} Steps: {steps}", True, COLOR_HUD)
+        self.screen.blit(surf, (8,8))
 
     # -------------------------------------------
     # Menu Rendering
