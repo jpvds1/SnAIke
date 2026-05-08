@@ -1,21 +1,32 @@
 from enum import Enum, auto
 import pygame
 
-# Menu palette
-BUTTON_COLOR = (209, 0, 0)
-BUTTON_HOVER_COLOR = (255, 0, 0)
-SELECTOR_COLOR = (0, 0, 150)
+# Shared palette
+COLOR_BG         = ( 18,  18,  18)
+COLOR_SURFACE    = ( 30,  30,  30)
+COLOR_BORDER     = ( 50,  50,  50)
+
+COLOR_TEXT       = (220, 220, 220)
+COLOR_TEXT_MUTED = (120, 120, 120)
+
+
+COLOR_PRIMARY    = ( 30, 160,  60)
+COLOR_PRIMARY_HO = ( 80, 255, 120)
+COLOR_DANGER     = (160,  40,  40)
+COLOR_DANGER_HO  = (220,  50,  50)
+COLOR_NEUTRAL    = ( 50,  50,  50)
+COLOR_NEUTRAL_HO = ( 75,  75,  75)
 
 # Game palette
-COLOR_BG         = ( 18,  18,  18)
+
 COLOR_GRID       = ( 38,  38,  38)
 COLOR_SNAKE_HEAD = ( 80, 255, 120)
 COLOR_SNAKE_BODY = ( 30, 160,  60)
 COLOR_APPLE      = (220,  50,  50)
 COLOR_HUD        = (220, 220, 220)
  
-CELL_PAD = 2
-
+CELL_PAD   = 2
+BTN_RADIUS = 8
 
 class MenuState(Enum):
     MAIN             = auto()
@@ -36,8 +47,8 @@ class Renderer:
 
         self.menu_state = MenuState.MAIN
 
-        self.font = pygame.font.Font(None, 10 * scale_ratio)
-        self.hud_font = pygame.font.Font(None, 6 * scale_ratio)
+        self.font       = pygame.font.Font(None, 10 * scale_ratio)
+        self.small_font = pygame.font.Font(None, 6 * scale_ratio)
 
         self.controllers = ["Human", "Genetic Algorithm", "NEAT", "Q-Learning"]
         self.play_selector = Selector(self.controllers)
@@ -46,22 +57,26 @@ class Renderer:
     # Rendering Helpers
     # -------------------------------------------
 
-    def draw_button(self, text, x, y, width, height, mouse_click, mouse_pos):
-        if x < mouse_pos[0] < x + width and y < mouse_pos[1] < y + height:
-            pygame.draw.rect(self.screen, BUTTON_HOVER_COLOR, (x, y, width, height))
-            if mouse_click:
-                return True
-        else:
-            pygame.draw.rect(self.screen, BUTTON_COLOR, (x, y, width, height))
+    def draw_button(self, text, x, y, width, height, mouse_click, mouse_pos, variant = "primary"):
+        hovered = x < mouse_pos[0] < x + width and y < mouse_pos[1] < y + height
 
-        text_surface = self.font.render(text, True, "black")
-        text_rect = text_surface.get_rect(center=(x + width // 2, y + height // 2))
-        self.screen.blit(text_surface, text_rect)
+        colors = {
+            "primary": (COLOR_PRIMARY_HO if hovered else COLOR_PRIMARY),
+            "secondary": (COLOR_NEUTRAL_HO if hovered else COLOR_NEUTRAL),
+            "danger": (COLOR_DANGER_HO if hovered else COLOR_DANGER)
+        }
+        color = colors.get(variant, COLOR_PRIMARY)
 
-    def draw_text(self, text, x, y):
-        text_surface = self.font.render(text, True, "black")
-        text_rect = text_surface.get_rect(center=(x, y))
-        self.screen.blit(text_surface, text_rect)
+        pygame.draw.rect(self.screen, color, (x, y, width, height), border_radius=BTN_RADIUS)
+        surf = self.font.render(text, True, COLOR_TEXT)
+        self.screen.blit(surf, surf.get_rect(center=(x + width // 2, y + height // 2)))
+
+        return bool(hovered and mouse_click)
+
+    def draw_text(self, text, x, y, font=None, color=COLOR_TEXT):
+        f = font or self.font
+        surf = f.render(text, True, color)
+        self.screen.blit(surf, surf.get_rect(center=(x, y)))
 
     def draw_selector(self, selector, x, y, width, height, mouse_click, mouse_pos):
         arrow_w = height
@@ -73,27 +88,32 @@ class Renderer:
 
         # Left Arrow
         left_rect = pygame.Rect(left_x, top_y, arrow_w, height)
+        left_rect_fill = pygame.Rect(left_x + arrow_w - BTN_RADIUS, top_y, BTN_RADIUS * 2, height)
         left_hovered = left_rect.collidepoint(mouse_pos)
-        pygame.draw.rect(self.screen, BUTTON_HOVER_COLOR if left_hovered else BUTTON_COLOR, left_rect)
-        left_surf = self.font.render("<", True, "black")
+        pygame.draw.rect(self.screen, COLOR_NEUTRAL_HO if left_hovered else COLOR_NEUTRAL, left_rect, border_radius=BTN_RADIUS)
+        pygame.draw.rect(self.screen, COLOR_NEUTRAL_HO if left_hovered else COLOR_NEUTRAL, left_rect_fill)
+        left_surf = self.font.render("<", True, COLOR_TEXT)
         self.screen.blit(left_surf, left_surf.get_rect(center=left_rect.center))
         if left_hovered and mouse_click:
             selector.prev()
-
-        # Label
-        opt_rect = pygame.Rect(opt_x, top_y, option_w, height)
-        pygame.draw.rect(self.screen, SELECTOR_COLOR, opt_rect)
-        opt_surf = self.font.render(selector.selected, True, "black")
-        self.screen.blit(opt_surf, opt_surf.get_rect(center=opt_rect.center))
         
         # Right Arrow
         right_rect = pygame.Rect(right_x, top_y, arrow_w, height)
+        right_rect_fill = pygame.Rect(right_x - BTN_RADIUS, top_y, BTN_RADIUS * 2, height)
         right_hovered = right_rect.collidepoint(mouse_pos)
-        pygame.draw.rect(self.screen, BUTTON_HOVER_COLOR if right_hovered else BUTTON_COLOR, right_rect)
-        right_surf = self.font.render(">", True, "black")
+        pygame.draw.rect(self.screen, COLOR_NEUTRAL_HO if right_hovered else COLOR_NEUTRAL, right_rect, border_radius=BTN_RADIUS)
+        pygame.draw.rect(self.screen, COLOR_NEUTRAL_HO if right_hovered else COLOR_NEUTRAL, right_rect_fill)
+        right_surf = self.font.render(">", True, COLOR_TEXT)
         self.screen.blit(right_surf, right_surf.get_rect(center=right_rect.center))
         if right_hovered and mouse_click:
             selector.next()
+
+        # Label
+        opt_rect = pygame.Rect(opt_x, top_y, option_w, height)
+        pygame.draw.rect(self.screen, COLOR_SURFACE, opt_rect, border_radius=BTN_RADIUS)
+        pygame.draw.rect(self.screen, COLOR_BORDER, opt_rect, 1, border_radius=BTN_RADIUS)
+        opt_surf = self.font.render(selector.selected, True, COLOR_TEXT)
+        self.screen.blit(opt_surf, opt_surf.get_rect(center=opt_rect.center))
 
     # -------------------------------------------
     # Game Rendering
@@ -142,7 +162,7 @@ class Renderer:
             pygame.draw.rect(self.screen, color, rect, border_radius=4)
 
     def _draw_hud(self, score: int, steps: int):
-        surf = self.hud_font.render(f"Score: {score} Steps: {steps}", True, COLOR_HUD)
+        surf = self.small_font.render(f"Score: {score} Steps: {steps}", True, COLOR_HUD)
         self.screen.blit(surf, (8,8))
 
     # -------------------------------------------
@@ -150,35 +170,57 @@ class Renderer:
     # -------------------------------------------
 
     def render_menu_main(self, actions):
-        self.screen.fill("white")
+        self.screen.fill(COLOR_BG)
 
-        self.draw_text("SnAIke", self.width * 0.5, self.height * 0.3)
+        self.draw_text("SnAIke", self.width * 0.5, self.height * 0.28, color=COLOR_PRIMARY_HO)
+        self.draw_text("Use arrow keys or WASD to play", self.width * 0.5, self.height * 0.38, font=self.small_font, color=COLOR_TEXT_MUTED)
 
-        if self.draw_button("Play", self.width * 0.25, self.height * 0.35, self.width * 0.5, self.height * 0.12, actions["MOUSE_CLICK"], actions["MOUSE_POS"]):
+        cx = self.width * 0.25
+        bw = self.width * 0.5
+        bh = self.height * 0.1
+        gap = self.height * 0.04
+
+        y_play = self.height * 0.47
+        y_train = y_play + bh + gap
+        y_quit = y_train + bh + gap
+
+        if self.draw_button("Play", cx, y_play, bw, bh, actions["MOUSE_CLICK"], actions["MOUSE_POS"]):
             self.menu_state = MenuState.PLAY_SELECT
             return
 
-        if self.draw_button("Train", self.width * 0.25, self.height * 0.5, self.width * 0.5, self.height * 0.12, actions["MOUSE_CLICK"], actions["MOUSE_POS"]):
+        if self.draw_button("Train", cx, y_train, bw, bh, actions["MOUSE_CLICK"], actions["MOUSE_POS"], variant="secondary"):
             self.menu_state = MenuState.ALGORITHM_SELECT
             return
 
-        if self.draw_button("Quit", self.width * 0.25, self.height * 0.65, self.width * 0.5, self.height * 0.12, actions["MOUSE_CLICK"], actions["MOUSE_POS"]):
+        if self.draw_button("Quit", cx, y_quit, bw, bh, actions["MOUSE_CLICK"], actions["MOUSE_POS"], variant="danger"):
             self.menu_state = MenuState.QUIT
 
     def render_menu_play_sel(self, actions):
-        self.screen.fill("white")
+        self.screen.fill(COLOR_BG)
+
+        self.draw_text("Select Controller", self.width * 0.5, self.height * 0.28, color=COLOR_TEXT)
+        self.draw_text("choose who plays this session", self.width * 0.5, self.height * 0.36, font=self.small_font, color=COLOR_TEXT_MUTED)
 
         self.draw_selector(
             self.play_selector,
-            self.width * 0.5, self.height * 0.2,   # center
-            self.width * 0.5, self.height * 0.1,   # width, height
+            self.width * 0.5, self.height * 0.50,
+            self.width * 0.55, self.height * 0.1,
             actions["MOUSE_CLICK"], actions["MOUSE_POS"]
         )
 
-        if self.draw_button("Play", self.width * 0.25, self.height * 0.35, self.width * 0.5, self.height * 0.12, actions["MOUSE_CLICK"], actions["MOUSE_POS"]):
+        cx = self.width * 0.25
+        bw = self.width * 0.5
+        bh = self.height * 0.1
+        gap = self.height * 0.04
+
+        y_play = self.height * 0.64
+        y_back = y_play + bh + gap
+
+
+        if self.draw_button("Play", cx, y_play, bw, bh, actions["MOUSE_CLICK"], actions["MOUSE_POS"]):
             return {"controller": self.play_selector.selected}
 
-        if self.draw_button("Back", self.width * 0.25, self.height * 0.5, self.width * 0.5, self.height * 0.12, actions["MOUSE_CLICK"], actions["MOUSE_POS"]):
+        if self.draw_button("Back", cx, y_back, bw, bh, actions["MOUSE_CLICK"], actions["MOUSE_POS"], variant="secondary"):
             self.menu_state = MenuState.MAIN
             return
 
