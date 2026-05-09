@@ -6,10 +6,22 @@ from envs.snake_env import SnakeEnv
 from playing.session import Session
 from agents.human_agent import HumanAgent
 
+from agents.human_agent import HumanAgent
+from agents.genetic_agent import GeneticAgent
+from agents.neat_agent import NEATAgent
+from agents.qlearning_agent import QLearningAgent
+
 FRAME_RATE = 10
 SCALE_RATIO = 4
 SCREEN_WIDTH = 200
 SCREEN_HEIGHT = 200
+
+ALL_AGENTS = [
+    HumanAgent,
+    GeneticAgent,
+    NEATAgent,
+    QLearningAgent
+]
 
 def initialize_system():
     pygame.init()
@@ -18,14 +30,13 @@ def initialize_system():
     clock = pygame.time.Clock()
 
     input_handler = InputHandler()
-    renderer = Renderer(screen, clock, SCREEN_HEIGHT, SCREEN_WIDTH, SCALE_RATIO, input_handler)   
+    renderer = Renderer(screen, clock, SCREEN_HEIGHT, SCREEN_WIDTH, SCALE_RATIO, input_handler, ALL_AGENTS)
     return screen, clock, renderer, input_handler
 
-def build_agent(controller: str, input_handler: InputHandler):
-    if controller == "Human":
-        return HumanAgent(input_handler)
-
-    raise ValueError(f"Unknown controller: {controller}")
+def build_agent(agent_class, input_handler: InputHandler):
+    if not getattr(agent_class, "trainable", True):
+        return agent_class(input_handler)
+    return agent_class()
 
 def shutdown():
     pygame.quit()
@@ -39,24 +50,32 @@ def main_loop(renderer, clock, input_handler):
             running = False
             continue
 
-        controller = config.get("controller")
-        if controller is None:
-            continue
+        mode = config.get("mode")
 
-        agent = build_agent(controller, input_handler)
-        env = SnakeEnv()
+        if mode == "play":
+            controller = config.get("controller")
+            if controller is None:
+                continue
 
-        session = Session(
-            agent=agent,
-            env=env,
-            input_handler=input_handler,
-            clock=clock,
-            frame_rate=FRAME_RATE,
-            render_fn=renderer.render_game
-        )
+            agent = build_agent(controller, input_handler)
+            env = SnakeEnv()
 
-        result = session.run()
-        print(f"Game over - score: {result['score']} steps: {result['steps']}")
+            session = Session(
+                agent=agent,
+                env=env,
+                input_handler=input_handler,
+                clock=clock,
+                frame_rate=FRAME_RATE,
+                render_fn=renderer.render_game
+            )
+
+            result = session.run()
+            print(f"Game over - score: {result['score']} steps: {result['steps']}")
+        elif mode == "train":
+            agent_class = config.get("controller")
+            limit       = config.get("limit", 100)
+            headless    = config.get("headless", True)
+            print(f"Training {agent_class.display_name} for {limit} generations\n(headless={headless}) - Trainer not yet implemented.")
 
 def main():
     screen, clock, renderer, input_handler = initialize_system()

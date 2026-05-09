@@ -37,7 +37,7 @@ class MenuState(Enum):
 
 
 class Renderer:
-    def __init__(self, screen, clock, u_height, u_width, scale_ratio, input_handler):
+    def __init__(self, screen, clock, u_height, u_width, scale_ratio, input_handler, agent_classes=None):
         self.screen = screen
         self.clock = clock
         self.height = u_height * scale_ratio
@@ -50,8 +50,17 @@ class Renderer:
         self.font       = pygame.font.Font(None, 10 * scale_ratio)
         self.small_font = pygame.font.Font(None, 6 * scale_ratio)
 
-        self.controllers = ["Human", "Genetic Algorithm", "NEAT", "Q-Learning"]
-        self.play_selector = Selector(self.controllers)
+        agent_classes = agent_classes or []
+        self.all_agents = agent_classes
+        self.play_selector = Selector([a.display_name for a in agent_classes])
+
+        self.trainable_agents = [a for a in agent_classes if getattr(a, "trainable", True)]
+        self.train_selector = Selector([a.display_name for a in self.trainable_agents])
+
+        self.train_gen_limit = 100
+        self.train_time_limit = 10
+        self.train_headless = True
+        self.train_limit_mode_selector = Selector(["Generations", "Time (min)"])
 
     # -------------------------------------------
     # Rendering Helpers
@@ -114,6 +123,68 @@ class Renderer:
         pygame.draw.rect(self.screen, COLOR_BORDER, opt_rect, 1, border_radius=BTN_RADIUS)
         opt_surf = self.font.render(selector.selected, True, COLOR_TEXT)
         self.screen.blit(opt_surf, opt_surf.get_rect(center=opt_rect.center))
+
+    def draw_number_control(self, value, cx, cy, width, height, step, mouse_click, mouse_pos) -> int:
+        btn_w = height
+        num_w = width - 2 * btn_w
+        left_x = int(cx - width // 2)
+        num_x = left_x + btn_w
+        right_x = num_x + num_w
+        top_y = int(cy - height // 2)
+        new_value = value
+
+        # Minus button
+        lr = pygame.Rect(left_x, top_y, btn_w, height)
+        lf = pygame.Rect(left_x + btn_w - BTN_RADIUS, top_y, BTN_RADIUS * 2, height)
+        lh = lr.collidepoint(mouse_pos)
+        pygame.draw.rect(self.screen, COLOR_NEUTRAL_HO if lh else COLOR_NEUTRAL, lr, border_radius=BTN_RADIUS)
+        pygame.draw.rect(self.screen, COLOR_NEUTRAL_HO if lh else COLOR_NEUTRAL, lf)
+        ms = self.font.render("\u2212", True, COLOR_TEXT)
+        self.screen.blit(ms, ms.get_rect(center=lr.center))
+        if lh and mouse_click:
+            new_value = max(step, value - step)
+
+        # Plus button
+        rr = pygame.Rect(right_x, top_y, btn_w, height)
+        rf = pygame.Rect(right_x - BTN_RADIUS, top_y, BTN_RADIUS * 2, height)
+        rh = rr.collidepoint(mouse_pos)
+        pygame.draw.rect(self.screen, COLOR_NEUTRAL_HO if rh else COLOR_NEUTRAL, rr, border_radius=BTN_RADIUS)
+        pygame.draw.rect(self.screen, COLOR_NEUTRAL_HO if rh else COLOR_NEUTRAL, rf)
+        ps = self.font.render("+", True, COLOR_TEXT)
+        self.screen.blit(ps, ps.get_rect(center=rr.center))
+        if rh and mouse_click:
+            new_value = value + step
+
+        # Value display
+        nr = pygame.Rect(num_x, top_y, num_w, height)
+        pygame.draw.rect(self.screen, COLOR_SURFACE, nr)
+        pygame.draw.rect(self.screen, COLOR_BORDER, nr, 1)
+        vs = self.font.render(str(value), True, COLOR_TEXT)
+        self.screen.blit(vs, vs.get_rect(center=nr.center))
+ 
+        return new_value
+
+    def _draw_toggle(self, cx, cy, value: bool, disabled: bool = False):
+        cx, cy = int(cx), int(cy)
+        h = int(self.height * 0.055)
+        w = h * 2
+        x = cx - w // 2
+        y = cy - h // 2
+ 
+        track_col = COLOR_PRIMARY if value else COLOR_NEUTRAL
+        if disabled:
+            track_col = tuple(max(0, c - 70) for c in track_col)
+ 
+        pygame.draw.rect(self.screen, track_col, (x, y, w, h), border_radius=BTN_RADIUS)
+ 
+        pad = 4
+        knob_size = h - 2 * pad
+        knob_x = (x + w - knob_size - pad) if value else (x + pad)
+        knob_col = COLOR_TEXT_MUTED if disabled else COLOR_TEXT
+        pygame.draw.rect(self.screen, knob_col,
+                         (knob_x, y + pad, knob_size, knob_size),
+                         border_radius=BTN_RADIUS // 2)
+
 
     # -------------------------------------------
     # Game Rendering
@@ -218,17 +289,131 @@ class Renderer:
 
 
         if self.draw_button("Play", cx, y_play, bw, bh, actions["MOUSE_CLICK"], actions["MOUSE_POS"]):
-            return {"controller": self.play_selector.selected}
+            return {"mode": "play", "controller": self.all_agents[self.play_selector.index]}
 
         if self.draw_button("Back", cx, y_back, bw, bh, actions["MOUSE_CLICK"], actions["MOUSE_POS"], variant="secondary"):
             self.menu_state = MenuState.MAIN
             return
 
-    def render_menu_algo_sel(self):
-        pass
+    def render_menu_algo_sel(self, actions):
+        self.screen.fill(COLOR_BG)
 
-    def render_menu_train_conf(self):
-        pass
+        self.draw_text("Select Algorithm", self.width * 0.5, self.height * 0.12, color=COLOR_TEXT)
+        self.draw_text("choose an algorithm to train", self.width * 0.5, self.height * 0.20, font=self.small_font, color=COLOR_TEXT_MUTED)
+
+        self.draw_selector(
+            self.train_selector,
+            self.width * 0.5, self.height * 0.30,
+            self.width * 0.60, self.height * 0.09,
+            actions["MOUSE_CLICK"], actions["MOUSE_POS"]
+        )
+
+
+        px = int(self.width * 0.08)
+        py = int(self.height * 0.42)
+        pw = int(self.width * 0.84)
+        ph = int(self.height * 0.28)
+        
+        pygame.draw.rect(self.screen, COLOR_SURFACE, (px, py, pw, ph), border_radius=BTN_RADIUS)
+        pygame.draw.rect(self.screen, COLOR_BORDER, (px, py, pw, ph), 1, border_radius=BTN_RADIUS)
+
+        agent_cls = self.trainable_agents[self.train_selector.index]
+        stats = agent_cls.load_stats()
+
+        
+        desc = getattr(agent_cls, "description", "")
+        self.draw_text(desc, self.width * 0.5, py + int(ph * 0.28), font=self.small_font, color=COLOR_TEXT_MUTED)
+
+
+        sep_y = py + int(ph * 0.52)
+        pygame.draw.line(self.screen, COLOR_BORDER, (px + 16, sep_y), (px + pw - 16, sep_y))
+
+
+        stats_data = [
+            ("Best Score", str(stats.get("highest_score", 0))),
+            ("Generation", str(stats.get("current_generation", 0))),
+            ("Avg Score", f"{stats.get("avg_score", 0.0):.2f}")
+        ]
+        col_w = pw // len(stats_data)
+        lbl_y = py + int(ph * 0.66)
+        val_y = py + int(ph * 0.84)
+        for i, (label, val) in enumerate(stats_data):
+            col_cx = px + col_w * i + col_w // 2
+            self.draw_text(label, col_cx, lbl_y, font=self.small_font, color=COLOR_TEXT_MUTED)
+            self.draw_text(val, col_cx, val_y, font=self.small_font, color=COLOR_TEXT)
+
+        
+        cx = self.width * 0.25
+        bw = self.width * 0.5
+        bh = self.height * 0.09
+
+        if self.draw_button("Train", cx, self.height * 0.76, bw, bh, actions["MOUSE_CLICK"], actions["MOUSE_POS"]):
+            self.menu_state = MenuState.TRAIN_CONFIG
+
+        if self.draw_button("Back", cx, self.height * 0.87, bw, bh, actions["MOUSE_CLICK"], actions["MOUSE_POS"]):
+            self.menu_state = MenuState.MAIN
+
+    def render_menu_train_conf(self, actions):
+        self.screen.fill(COLOR_BG)
+ 
+        agent_cls = self.trainable_agents[self.train_selector.index]
+ 
+        self.draw_text("Training Config",      self.width * 0.5, self.height * 0.12, color=COLOR_TEXT)
+        self.draw_text(agent_cls.display_name, self.width * 0.5, self.height * 0.20, font=self.small_font, color=COLOR_PRIMARY_HO)
+ 
+        self.draw_text("Limit by", self.width * 0.5, self.height * 0.26, font=self.small_font, color=COLOR_TEXT_MUTED)
+        self.draw_selector(
+            self.train_limit_mode_selector,
+            self.width * 0.5, self.height * 0.34,
+            int(self.width * 0.50), int(self.height * 0.09),
+            actions["MOUSE_CLICK"], actions["MOUSE_POS"],
+        )
+ 
+        by_time = self.train_limit_mode_selector.selected == "Time (min)"
+ 
+        if by_time:
+            self.draw_text("Duration (minutes)", self.width * 0.5, self.height * 0.45, font=self.small_font, color=COLOR_TEXT_MUTED)
+            self.train_time_limit = self.draw_number_control(
+                value       = self.train_time_limit,
+                cx          = self.width  * 0.5,
+                cy          = self.height * 0.53,
+                width       = int(self.width  * 0.50),
+                height      = int(self.height * 0.09),
+                step        = 1,
+                mouse_click = actions["MOUSE_CLICK"],
+                mouse_pos   = actions["MOUSE_POS"],
+            )
+        else:
+            self.draw_text("Generations", self.width * 0.5, self.height * 0.45, font=self.small_font, color=COLOR_TEXT_MUTED)
+            self.train_gen_limit = self.draw_number_control(
+                value       = self.train_gen_limit,
+                cx          = self.width  * 0.5,
+                cy          = self.height * 0.53,
+                width       = int(self.width  * 0.50),
+                height      = int(self.height * 0.09),
+                step        = 10,
+                mouse_click = actions["MOUSE_CLICK"],
+                mouse_pos   = actions["MOUSE_POS"],
+            )
+ 
+        self.draw_text("Headless Mode", self.width * 0.5, self.height * 0.62, font=self.small_font, color=COLOR_TEXT_MUTED)
+        self._draw_toggle(self.width * 0.5, self.height * 0.69, value=True, disabled=True)
+ 
+        cx = self.width  * 0.25
+        bw = self.width  * 0.50
+        bh = self.height * 0.09
+ 
+        if self.draw_button("Start Training", cx, self.height * 0.76, bw, bh, actions["MOUSE_CLICK"], actions["MOUSE_POS"]):
+            return {
+                "mode":       "train",
+                "controller": agent_cls,
+                "limit_mode": "time" if by_time else "generations",
+                "limit":      self.train_time_limit if by_time else self.train_gen_limit,
+                "headless":   self.train_headless,
+            }
+ 
+        if self.draw_button("Back", cx, self.height * 0.87, bw, bh, actions["MOUSE_CLICK"], actions["MOUSE_POS"], variant="secondary"):
+            self.menu_state = MenuState.ALGORITHM_SELECT
 
     def render_menu(self) -> dict:
         choosing = True
@@ -240,20 +425,23 @@ class Renderer:
             if actions["BACK"]:
                 if self.menu_state == MenuState.MAIN:
                     return {"QUIT": True}
-                else:
+                elif self.menu_state in (MenuState.PLAY_SELECT, MenuState.ALGORITHM_SELECT):
                     self.menu_state = MenuState.MAIN
+                elif self.menu_state == MenuState.TRAIN_CONFIG:
+                    self.menu_state = MenuState.ALGORITHM_SELECT
             
             elif self.menu_state == MenuState.MAIN:
                 self.render_menu_main(actions)
             elif self.menu_state == MenuState.PLAY_SELECT:
                 result = self.render_menu_play_sel(actions)
                 if result:
-                    print(result)
                     return result
             elif self.menu_state == MenuState.ALGORITHM_SELECT:
                 self.render_menu_algo_sel(actions)
             elif self.menu_state == MenuState.TRAIN_CONFIG:
-                self.render_menu_train_conf(actions)
+                result = self.render_menu_train_conf(actions)
+                if result:
+                    return result
 
             pygame.display.flip()
             self.clock.tick(60)
