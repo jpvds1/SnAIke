@@ -54,7 +54,7 @@ class Renderer:
         self.all_agents = agent_classes
         self.play_selector = Selector([a.display_name for a in agent_classes])
 
-        self.trainable_agents = [a for a in agent_classes if getattr(a, "trainable", True)]
+        self.trainable_agents = [a for a in agent_classes if getattr(a, "trainable", False)]
         self.train_selector = Selector([a.display_name for a in self.trainable_agents])
 
         self.train_gen_limit = 100
