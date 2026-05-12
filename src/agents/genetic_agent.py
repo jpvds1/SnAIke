@@ -1,7 +1,11 @@
 import numpy as np
 import random
+import json
+import os
 from agents.base_agent import Agent
 from core.snake import Direction, _is_opposite
+
+_SCHEMA_VERSION = 1.0
  
 class NeuralNetwork:
     def __init__(self, layer_sizes: list[int]):
@@ -85,6 +89,8 @@ class GeneticAgent(Agent):
         self.mutation_strength = mutation_strength
         self.tournament_size = tournament_size
 
+        self.load()
+
     # ---------------------------------------------------------------------------
     # API
     # ---------------------------------------------------------------------------
@@ -109,13 +115,14 @@ class GeneticAgent(Agent):
         score = stats.get("score", 0)
         steps = stats.get("steps", 0)
 
-        fitness = (score * 1000) + steps
+        fitness = (score * 5000) - (steps * 2) + 1000
         self.fitness_scores[self.current_idx] = fitness
 
         self.current_idx += 1
 
+
     def on_generation_end(self, gen_stats):
-        print(f"Gen {self.generation} | Best Fitness: {max(self.fitness_scores):.1f} | Avg Fitness: {sum(self.fitness_scores) / len(self.fitness_scores)}")
+        print(f"[GeneticAlgorithm] Gen {self.generation} | Best Fitness: {max(self.fitness_scores):.1f} | Avg Fitness: {sum(self.fitness_scores) / len(self.fitness_scores)}")
 
         ranked = sorted(zip(self.fitness_scores, self.population), key=lambda x: x[0], reverse=True)
 
@@ -139,6 +146,8 @@ class GeneticAgent(Agent):
         self.fitness_scores = [0.0] * self.pop_size
         self.current_idx = 0
         self.generation += 1
+
+        self.save()
 
     @classmethod
     def load_stats(cls) -> dict:
@@ -167,5 +176,60 @@ class GeneticAgent(Agent):
         weights[mutation_mask] += noise[mutation_mask]
         return weights
 
+    # ---------------------------------------------------------------------------
+    # Persistence
+    # ---------------------------------------------------------------------------
 
-    
+    def save(self):
+        state = {
+            "agent": "GeneticAlgorithm",
+            "version": _SCHEMA_VERSION,
+            "generation": self.generation,
+            "hyperparameters": {
+                "pop_size":          self.pop_size,
+                "elite_count":       self.elite_count,
+                "mutation_rate":     self.mutation_rate,
+                "mutation_strength": self.mutation_strength,
+                "tournament_size":   self.tournament_size,
+                "layer_sizes":       self.layer_sizes
+            },
+            "population_weights": [nn.get_flat().tolist() for nn in self.population]
+        }
+        os.makedirs("./checkpoints", exist_ok=True)
+        file_path = os.path.join("./checkpoints", f"{"GeneticAlgorithm"}.json")
+        with open(file_path, "w") as f:
+            json.dump(state, f)
+        print(f"[GeneticAlgorithm] Generation {self.generation} saved to {file_path}")
+
+    def load(self):
+        file_path = os.path.join("./checkpoints", f"{"GeneticAlgorithm"}.json")
+        if not os.path.exists(file_path):
+            return
+
+        try:
+            with open(file_path, "r") as f:
+                state = json.load(f)
+
+            agent = state.get("agent", "GeneticAlgorithm")
+            if agent != "GeneticAlgorithm":
+                raise "[Load] Agent missmatch"
+            version = state.get("version", _SCHEMA_VERSION)
+            if version != _SCHEMA_VERSION:
+                raise "[Load] Schema version missmatch"
+
+            self.generation =        state.get("generation", 1)
+            hyperparameters =        state.get("hyperparameters", {})
+            self.pop_size =          hyperparameters.get("pop_size", 50)
+            self.elite_count =       hyperparameters.get("elite_count", 5)
+            self.mutation_rate =     hyperparameters.get("mutation_rate", 0.15)
+            self.mutation_strength = hyperparameters.get("mutation_strength", 0.2)
+            self.tournament_size =   hyperparameters.get("tournament_size", 5)
+            self.layer_sizes =       hyperparameters.get("layer_sizes", [9, 15, 10, 4])
+
+            weights_list = state.get("population_weights", [])
+            for i, weights in enumerate(weights_list):
+                if i < len(self.population):
+                    self.population[i].set_flat(np.array(weights))
+
+        except Exception as e:
+            print(f"[GeneticAlgorithm] Failed to load state: {e}")

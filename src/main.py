@@ -73,7 +73,7 @@ def main_loop(renderer, clock, input_handler):
             )
 
             result = session.run()
-            print(f"Game over - score: {result['score']} steps: {result['steps']}")
+            print(f"[Main] Game over - score: {result['score']} steps: {result['steps']}")
         elif mode == "train":
             agent_class = config.get("controller")
             limit_mode  = config.get("limit_mode", "time")
@@ -83,9 +83,9 @@ def main_loop(renderer, clock, input_handler):
             train_config = TrainerConfig.from_ui(limit_mode, limit)
             trainer        = Trainer(agent, train_config, on_generation_end=print)
             
-            print(f"Training {agent_class.display_name} — {limit_mode}={limit}")
+            print(f"[Main] Training {agent_class.display_name} — {limit_mode}={limit}")
             history = trainer.run()
-            print(f"Done — {len(history)} generations, best score: {max((s.max_score for s in history), default=0)}")
+            print(f"[Main] Done — {len(history)} generations, best score: {max((s.max_score for s in history), default=0)}")
 
 
 

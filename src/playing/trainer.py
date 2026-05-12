@@ -164,10 +164,7 @@ class Trainer:
 
         if self.config.time_limit_minutes is not None:
             elapsed = (time.monotonic() - run_start) / 60.0
-            #print(elapsed)
-            #print(self.config.time_limit_minutes)
             if elapsed >= self.config.time_limit_minutes:
-                print("True")
                 return True
 
         return False
@@ -185,6 +182,9 @@ class Trainer:
             if result["aborted"]:
                 self.stop()
                 break
+
+            self._call(self.agent, "on_episode_end", result)
+            
             scores.append(result["score"])
             rewards.append(result["total_reward"])
             steps.append(result["steps"])
