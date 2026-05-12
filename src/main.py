@@ -81,7 +81,7 @@ def main_loop(renderer, clock, input_handler):
 
             agent       = build_agent(agent_class, input_handler)
             train_config = TrainerConfig.from_ui(limit_mode, limit)
-            trainer        = Trainer(agent, train_config, on_generation_end=print)
+            trainer        = Trainer(agent, train_config, on_generation_end=None)
             
             print(f"[Main] Training {agent_class.display_name} — {limit_mode}={limit}")
             history = trainer.run()

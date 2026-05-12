@@ -79,6 +79,7 @@ class GeneticAgent(Agent):
 
         self.population = [NeuralNetwork(self.layer_sizes) for _ in range(pop_size)]
         self.fitness_scores = [0.0] * pop_size
+        self.scores = [0] * pop_size
         self.current_idx = 0
         self.generation = 1
 
@@ -118,11 +119,13 @@ class GeneticAgent(Agent):
         fitness = (score * 5000) - (steps * 2) + 1000
         self.fitness_scores[self.current_idx] = fitness
 
+        self.scores[self.current_idx] = score
+
         self.current_idx += 1
 
 
     def on_generation_end(self, gen_stats):
-        print(f"[GeneticAlgorithm] Gen {self.generation} | Best Fitness: {max(self.fitness_scores):.1f} | Avg Fitness: {sum(self.fitness_scores) / len(self.fitness_scores)}")
+        print(f"[GeneticAlgorithm] Gen {self.generation} | Best Score: {max(self.scores)} | Avg Score: {sum(self.scores) / len(self.scores)} | Best Fitness: {max(self.fitness_scores):.1f} | Avg Fitness: {sum(self.fitness_scores) / len(self.fitness_scores)}")
 
         ranked = sorted(zip(self.fitness_scores, self.population), key=lambda x: x[0], reverse=True)
 
@@ -144,6 +147,7 @@ class GeneticAgent(Agent):
 
         self.population = new_population
         self.fitness_scores = [0.0] * self.pop_size
+        self.scores = [0] * self.pop_size
         self.current_idx = 0
         self.generation += 1
 
@@ -199,7 +203,7 @@ class GeneticAgent(Agent):
         file_path = os.path.join("./checkpoints", f"{"GeneticAlgorithm"}.json")
         with open(file_path, "w") as f:
             json.dump(state, f)
-        print(f"[GeneticAlgorithm] Generation {self.generation} saved to {file_path}")
+        #print(f"[GeneticAlgorithm] Generation {self.generation} saved to {file_path}")
 
     def load(self):
         file_path = os.path.join("./checkpoints", f"{"GeneticAlgorithm"}.json")
