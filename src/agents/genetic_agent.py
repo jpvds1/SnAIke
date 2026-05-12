@@ -51,6 +51,8 @@ class ObservationWrapper:
         ax, ay = apple
         bw, bh = board_size
 
+        snake_size = float(len(snake_positions)) / (bw * bh) 
+
         body_set = {tuple(p) for p in snake_positions[1:]}
 
         dx, dy = _dir_to_vec(direction)
@@ -82,7 +84,8 @@ class ObservationWrapper:
             body_ahead, body_right, body_left,
             wall_ahead, wall_behind, wall_right, wall_left,
             direction_x, direction_y,
-            apple_ahead_val, apple_side_val
+            apple_ahead_val, apple_side_val,
+            snake_size
         ], dtype=np.float64)
 
     @staticmethod
@@ -167,11 +170,13 @@ class GeneticAgent(Agent):
         elite_count: int = 5,
         mutation_rate: float = 0.10,
         mutation_strength: float = 0.2,
+        min_mutation_strength: float = 0.05,
+        mut_stren_dropoff: int = 40,
         tournament_size: int = 5
     ):
         self.trainable = True
         self.pop_size = pop_size
-        self.layer_sizes = [11, 16, 3]
+        self.layer_sizes = [12, 16, 3]
 
         self.population = [NeuralNetwork(self.layer_sizes) for _ in range(pop_size)]
         self.fitness_scores = [0.0] * pop_size
@@ -184,6 +189,8 @@ class GeneticAgent(Agent):
         self.elite_count = elite_count
         self.mutation_rate = mutation_rate
         self.mutation_strength = mutation_strength
+        self.min_mutation_strength = min_mutation_strength
+        self.mut_stren_dropoff = mut_stren_dropoff
         self.tournament_size = tournament_size
 
         self.load()
@@ -271,7 +278,9 @@ class GeneticAgent(Agent):
 
     def _mutate(self, weights: np.ndarray) -> np.ndarray:
         mutation_mask = np.random.rand(len(weights)) < self.mutation_rate
-        noise = np.random.randn(len(weights)) * self.mutation_strength
+        mut_stren = self.mutation_strength - 0.01 * (self.generation // self.mut_stren_dropoff)
+        mut_stren = max(mut_stren, self.min_mutation_strength)
+        noise = np.random.randn(len(weights)) * mut_stren
         weights[mutation_mask] += noise[mutation_mask]
         return weights
 
