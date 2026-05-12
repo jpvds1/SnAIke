@@ -65,12 +65,9 @@ class Engine:
             "apple": apple,
             "score": self.score,
             "steps": self.steps,
+            "hunger": self.steps_since_apple,
             "done": self.done,
-            "board_size": (self.width, self.height),
-            "delta_apple": (
-                (apple[0] - head[0], apple[1] - head[1]) if apple else (0, 0)
-            ),
-            "danger": self._danger_flags(head, head_dir)
+            "board_size": (self.width, self.height)
         }
 
     # ---------------------------------------------
@@ -95,37 +92,6 @@ class Engine:
         out_of_bounds = not (0 <= x < self.width and 0 <= y < self.height)
         self_collision = head in self.snake.positions[1:]
         return out_of_bounds or self_collision
-
-    def _danger_flags(
-        self,
-        head: tuple[int, int],
-        direction: Direction
-    ) -> dict[str, bool]:
-        x, y = head
-
-        turns = {
-            Direction.UP:    {"ahead": (x, y-1), "left":  (x-1, y), "right": (x+1, y)},
-            Direction.DOWN:  {"ahead": (x, y+1), "left":  (x+1, y), "right": (x-1, y)},
-            Direction.LEFT:  {"ahead": (x-1, y), "left":  (x, y+1), "right": (x, y-1)},
-            Direction.RIGHT: {"ahead": (x+1, y), "left":  (x, y-1), "right": (x, y+1)},
-        }
-        occupied = set(self.snake.positions[1:])
-
-        return {
-            label: self._is_lethal(pos, occupied)
-            for label, pos in turns[direction].items()
-        }
-
-    def _is_lethal(
-        self,
-        pos: tuple[int, int],
-        occupied: set[tuple[int, int]],
-    ) -> bool:
-        x, y = pos
-        return (
-            not (0 <= x < self.width and 0 <= y < self.height)
-            or pos in occupied
-        )
 
     def _spawn_apple(self) -> tuple[int, int] | None:
         occupied = set(self.snake.positions)

@@ -5,8 +5,104 @@ import os
 from agents.base_agent import Agent
 from core.snake import Direction, _is_opposite
 
-_SCHEMA_VERSION = 1.0
+_SCHEMA_VERSION = 2.0
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _dir_to_vec(direction: Direction) -> tuple[int, int]:
+    if direction == Direction.UP:    return ( 0,-1)
+    if direction == Direction.DOWN:  return ( 0, 1)
+    if direction == Direction.LEFT:  return (-1, 0)
+    if direction == Direction.RIGHT: return ( 1, 0)
+
+def _vec_to_dir(dx: int, dy: int) -> Direction:
+    return {
+        ( 0,-1): Direction.UP,
+        ( 0, 1): Direction.DOWN,
+        (-1, 0): Direction.LEFT,
+        ( 1, 0): Direction.RIGHT
+    }[(dx, dy)]
+
+def _rotate_cw(dx: int, dy: int) -> tuple[int, int]:
+    return (-dy, dx)
+
+def _rotate_ccw(dx: int, dy: int) -> tuple[int, int]:
+    return (dy, -dx)
+
+# ---------------------------------------------------------------------------
+# Observation Wrapper
+# ---------------------------------------------------------------------------
  
+class ObservationWrapper:
+    @classmethod
+    def observation_from_state(cls, state: dict) -> np.ndarray:
+        snake_positions = state["snake_positions"]
+        head            = state["head"]
+        direction       = state["direction"]
+        apple           = state["apple"]
+        score           = state["score"]
+        steps           = state["steps"]
+        hunger          = state["hunger"]
+        board_size      = state["board_size"]
+
+        hx, hy = head
+        ax, ay = apple
+        bw, bh = board_size
+
+        body_set = {tuple(p) for p in snake_positions[1:]}
+
+        dx, dy = _dir_to_vec(direction)
+        rdx, rdy = _rotate_cw(dx, dy)
+        ldx, ldy = _rotate_ccw(dx, dy)
+
+        body_ahead = cls._body_dist(hx, hy,  dx,  dy, body_set, bw, bh)
+        body_left  = cls._body_dist(hx, hy, ldx, ldy, body_set, bw, bh)
+        body_right = cls._body_dist(hx, hy, rdx, rdy, body_set, bw, bh)
+
+        wall_ahead  = cls._wall_dist(hx, hy,  dx,  dy, bw, bh)
+        wall_behind = cls._wall_dist(hx, hy, -dx, -dy, bw, bh)
+        wall_left   = cls._wall_dist(hx, hy, ldx, ldy, bw, bh)
+        wall_right  = cls._wall_dist(hx, hy, rdx, rdy, bw, bh)
+
+        direction_x = float(dx)
+        direction_y = float(dy)
+
+        rel_x = ax - hx
+        rel_y = ay - hy
+
+        apple_fwd  = rel_x * dx + rel_y * dy
+        apple_side = rel_x * rdx + rel_y * rdy
+
+        apple_ahead_val = (1.0 / apple_fwd) if apple_fwd != 0 else 0.0
+        apple_side_val = (1.0 / apple_side) if apple_side != 0 else 0.0
+
+        return np.array([
+            body_ahead, body_right, body_left,
+            wall_ahead, wall_behind, wall_right, wall_left,
+            direction_x, direction_y,
+            apple_ahead_val, apple_side_val
+        ], dtype=np.float64)
+
+    @staticmethod
+    def _body_dist(hx: int, hy: int, dx: int, dy: int, body_set: set, bw: int, bh: int) -> float:
+        steps = 1
+        while True:
+            nx, ny = hx + dx * steps, hy + dy * steps
+            if not (0 <= nx < bw and 0 <= ny < bh):
+                return 0.0
+            if (nx, ny) in body_set:
+                return 1.0 / steps
+            steps += 1
+
+    @staticmethod
+    def _wall_dist(hx: int, hy: int, dx: int, dy: int, bw: int, bh: int) -> float:
+        steps_x = (bw - 1 - hx) if dx > 0 else (hx if dx < 0 else float("inf"))
+        steps_y = (bh - 1 - hy) if dy > 0 else (hy if dy < 0 else float("inf"))
+        steps = min(steps_x, steps_y)
+        return 1.0 / steps if steps > 0 else 1.0
+
 class NeuralNetwork:
     def __init__(self, layer_sizes: list[int]):
         self.layer_sizes = layer_sizes
@@ -67,15 +163,15 @@ class GeneticAgent(Agent):
 
     def __init__(
         self, 
-        pop_size: int = 50,
+        pop_size: int = 200,
         elite_count: int = 5,
-        mutation_rate: float = 0.15,
+        mutation_rate: float = 0.10,
         mutation_strength: float = 0.2,
         tournament_size: int = 5
     ):
         self.trainable = True
         self.pop_size = pop_size
-        self.layer_sizes = [9, 15, 10, 4]
+        self.layer_sizes = [11, 16, 3]
 
         self.population = [NeuralNetwork(self.layer_sizes) for _ in range(pop_size)]
         self.fitness_scores = [0.0] * pop_size
@@ -97,20 +193,22 @@ class GeneticAgent(Agent):
     # ---------------------------------------------------------------------------
 
  
-    def get_action(self, observation: np.ndarray) -> Direction | None:
-        nn = self.population[self.current_idx]
-        output = nn.forward(observation)
+    def get_action(self, state: dict) -> Direction | None:
+        obs    = ObservationWrapper.observation_from_state(state)
+        nn     = self.population[self.current_idx]
+        output = nn.forward(obs)
 
-        # Find current direction and filter it
-        curr_dir_idx = np.argmax(observation[3:7])
-        directions = [Direction.UP, Direction.DOWN, Direction.LEFT, Direction.RIGHT]
-        curr_dir = directions[curr_dir_idx]
-        for i, move in enumerate(directions):
-            if _is_opposite(move, curr_dir):
-                output[i] = -np.inf
+        action_idx = int(np.argmax(output))
 
-        action_idx = np.argmax(output)
-        return directions[action_idx]
+        dx, dy = _dir_to_vec(state["direction"])
+        if action_idx == 0:
+            new_dx, new_dy = _rotate_ccw(dx, dy)
+        elif action_idx == 1:
+            new_dx, new_dy = _rotate_cw(dx, dy)
+        else:
+            new_dx, new_dy = dx, dy
+
+        return _vec_to_dir(new_dx, new_dy)
 
     def on_episode_end(self, stats: dict):
         score = stats.get("score", 0)
@@ -118,9 +216,7 @@ class GeneticAgent(Agent):
 
         fitness = (score * 5000) - (steps * 2) + 1000
         self.fitness_scores[self.current_idx] = fitness
-
         self.scores[self.current_idx] = score
-
         self.current_idx += 1
 
 
@@ -138,8 +234,7 @@ class GeneticAgent(Agent):
             p1 = self._tournament_select(ranked)
             p2 = self._tournament_select(ranked)
 
-            child_weights = self._crossover(p1, p2)
-            child_weights = self._mutate(child_weights)
+            child_weights = self._mutate(self._crossover(p1, p2))
 
             child = NeuralNetwork(self.layer_sizes)
             child.set_flat(child_weights)
