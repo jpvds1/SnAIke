@@ -159,7 +159,7 @@ class Trainer:
         if self._stop_event.is_set():
             return True
 
-        if self.config.max_generations is not None and self._generation >= self.config.max_generations:
+        if self.config.max_generations is not None and self._generation > self.config.max_generations:
             return True
 
         if self.config.time_limit_minutes is not None:
