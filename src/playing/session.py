@@ -1,10 +1,13 @@
 import pygame
+from typing import Callable
+
 from envs.snake_env import SnakeEnv
 from agents.base_agent import Agent
 from ui.input_handler import InputHandler 
 
 class Session:
-    def __init__(self, 
+    def __init__(
+        self, 
         agent: Agent, 
         env: SnakeEnv, 
         input_handler: InputHandler, 
@@ -18,6 +21,7 @@ class Session:
         self.clock = clock
         self.frame_rate = frame_rate
         self.render_fn = render_fn
+        self._headless = render_fn is None and clock is None
 
     def run(self) -> dict:
         obs = self.env.reset()
@@ -30,11 +34,11 @@ class Session:
             self.render_fn(self.env._last_state)
 
         while not done:
-            actions = self.input_handler.process_events()
-
-            if actions["QUIT"] or actions["BACK"]:
-                aborted = True
-                break
+            if not self._headless:
+                actions = self.input_handler.process_events()
+                if actions["QUIT"] or actions["BACK"]:
+                    aborted = True
+                    break
 
             action = self.agent.get_action(obs)
             obs, reward, done, info = self.env.step(action)

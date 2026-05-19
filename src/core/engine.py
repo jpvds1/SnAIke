@@ -5,6 +5,13 @@ REWARD_APPLE     =  1.0
 REWARD_DEATH     = -1.0
 REWARD_STEP      =  0.0
 
+_DIRECTION_OFFSETS: dict[Direction, tuple[int, int]] = {
+    Direction.UP:    ( 0, -1),
+    Direction.DOWN:  ( 0,  1),
+    Direction.LEFT:  (-1,  0),
+    Direction.RIGHT: ( 1,  0),
+}
+
 class Engine:
     def __init__(self):
         self.width = 20
@@ -54,15 +61,11 @@ class Engine:
         return self.get_state(), reward, self.done
 
     def get_state(self):
-        head = self.snake.head.position
-        head_dir = self.snake.head.direction
-        apple = self.apple
-
         return {
             "snake_positions": self.snake.positions,
-            "head": head,
-            "direction": head_dir,
-            "apple": apple,
+            "head": self.snake.head.position,
+            "direction": self.snake.head.direction,
+            "apple": self.apple,
             "score": self.score,
             "steps": self.steps,
             "hunger": self.steps_since_apple,
@@ -79,19 +82,14 @@ class Engine:
             direction = self.snake.head.direction
 
         x, y = self.snake.head.position
-        return {
-            Direction.UP:    (x, y - 1),
-            Direction.DOWN:  (x, y + 1),
-            Direction.LEFT:  (x - 1, y),
-            Direction.RIGHT: (x + 1, y),
-        }[direction]
+        dx, dy = _DIRECTION_OFFSETS[direction]
+        return (x + dx, y + dy)
 
     def _is_dead(self) -> bool:
-        head = self.snake.head.position
-        x, y = head
-        out_of_bounds = not (0 <= x < self.width and 0 <= y < self.height)
-        self_collision = head in self.snake.positions[1:]
-        return out_of_bounds or self_collision
+        x, y = self.snake.head.position
+        if not (0 <= x < self.width and 0 <= y < self.height):
+            return True
+        return self.snake.head.position in self.snake.positions[1:]
 
     def _spawn_apple(self) -> tuple[int, int] | None:
         occupied = set(self.snake.positions)

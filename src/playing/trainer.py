@@ -7,16 +7,17 @@ from agents.base_agent import Agent
 from playing.session import Session
 from envs.snake_env import SnakeEnv
 
+_NULL_ACTIONS: dict = {
+    "QUIT":        False,
+    "BACK":        False,
+    "MOUSE_CLICK": False,
+    "MOUSE_POS":   (0, 0)
+}
+
 # Headless input stub
 class _NullInputHandler:
     def process_events(self) -> dict:
-        return {
-            "QUIT": False,
-            "BACK": False,
-            "MOUSE_CLICK": False,
-            "MOUSE_POS": (0, 0)
-        }
-
+        return _NULL_ACTIONS
 
 # ---------------------------------------------------------------------------
 # Per-generation statistics

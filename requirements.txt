@@ -1,3 +1,4 @@
 python-dotenv
 pygame-ce
 numpy
+numba

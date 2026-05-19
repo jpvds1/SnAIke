@@ -2,28 +2,89 @@ import numpy as np
 import random
 import json
 import os
+import numba
 from agents.base_agent import Agent
 from core.snake import Direction, _is_opposite
 
-_SCHEMA_VERSION = 2.0
+_SCHEMA_VERSION = 3.0
+
+# ---------------------------------------------------------------------------
+# Numba
+# ---------------------------------------------------------------------------
+
+@numba.njit(cache=True)
+def _nb_ray(hx: int, hy: int, dx: int, dy: int, occupied: np.ndarray, bw: int, bh: int) -> float:
+    s = 1
+    while True:
+        nx = hx + dx * s
+        ny = hy + dy * s
+        if nx < 0 or nx >= bw or ny < 0 or ny >= bh:
+            return 0.0
+        if occupied[nx, ny]:
+            return 1.0 / s
+        s += 1
+
+@numba.njit(cache=True)
+def _nb_wall(hx: int, hy: int, dx: int, dy: int, bw: int, bh: int) -> float:
+    _INF = bw * bh + 1
+    sx = (bw - 1 - hx) if dx > 0 else (hx if dx < 0 else _INF)
+    sy = (bh - 1 - hy) if dy > 0 else (hy if dy < 0 else _INF)
+    s = sx if sx < sy else sy
+    return 1.0 / s if s > 0 else 1.0
+
+@numba.njit(cache=True)
+def _nb_compute_obs(
+    hx: int, hy: int,
+    dx: int, dy: int,
+    rdx: int, rdy: int,
+    ldx: int, ldy: int,
+    ax: int, ay: int,
+    bw: int, bh: int,
+    snake_size: float,
+    body: np.ndarray) -> np.ndarray:
+    occupied = np.zeros((bw, bh), dtype=np.bool_)
+    for i in range(body.shape[0]):
+        occupied[body[i, 0], body[i, 1]] = True
+
+    ba = _nb_ray(hx, hy,  dx,  dy, occupied, bw, bh)
+    bl = _nb_ray(hx, hy, ldx, ldy, occupied, bw, bh)
+    br = _nb_ray(hx, hy, rdx, rdy, occupied, bw, bh)
+
+    wa = _nb_wall(hx, hy,  dx,  dy, bw, bh)
+    wb = _nb_wall(hx, hy, -dx, -dy, bw, bh)
+    wl = _nb_wall(hx, hy, ldx, ldy, bw, bh)
+    wr = _nb_wall(hx, hy, rdx, rdy, bw, bh)
+
+    rel_x = float(ax - hx)
+    rel_y = float(ay - hy)
+    afwd  = rel_x * dx + rel_y * dy
+    aside = rel_x * rdx + rel_y * rdy
+    av    = 1.0 / afwd if afwd != 0.0 else 0.0
+    asv   = 1.0 / aside if aside != 0.0 else 0.0
+
+    return np.array(
+        [ba, br, bl, wa, wb, wr, wl, float(dx), float(dy), av, asv, snake_size],
+        dtype=np.float64,
+    )
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+_DIR_TO_VEC: dict[Direction, tuple[int, int]] = {
+    Direction.UP:    ( 0, -1),
+    Direction.DOWN:  ( 0,  1),
+    Direction.LEFT:  (-1,  0),
+    Direction.RIGHT: ( 1,  0),
+}
+
+_VEC_TO_DIR: dict[tuple[int, int], Direction] = {v: k for k, v in _DIR_TO_VEC.items()}
+
 def _dir_to_vec(direction: Direction) -> tuple[int, int]:
-    if direction == Direction.UP:    return ( 0,-1)
-    if direction == Direction.DOWN:  return ( 0, 1)
-    if direction == Direction.LEFT:  return (-1, 0)
-    if direction == Direction.RIGHT: return ( 1, 0)
+    return _DIR_TO_VEC[direction]
 
 def _vec_to_dir(dx: int, dy: int) -> Direction:
-    return {
-        ( 0,-1): Direction.UP,
-        ( 0, 1): Direction.DOWN,
-        (-1, 0): Direction.LEFT,
-        ( 1, 0): Direction.RIGHT
-    }[(dx, dy)]
+    return _VEC_TO_DIR[(dx, dy)]
 
 def _rotate_cw(dx: int, dy: int) -> tuple[int, int]:
     return (-dy, dx)
@@ -39,54 +100,26 @@ class ObservationWrapper:
     @classmethod
     def observation_from_state(cls, state: dict) -> np.ndarray:
         snake_positions = state["snake_positions"]
-        head            = state["head"]
-        direction       = state["direction"]
-        apple           = state["apple"]
-        score           = state["score"]
-        steps           = state["steps"]
-        hunger          = state["hunger"]
-        board_size      = state["board_size"]
-
-        hx, hy = head
-        ax, ay = apple
-        bw, bh = board_size
+        hx, hy          = state["head"]
+        ax, ay          = state["apple"]
+        bw, bh          = state["board_size"]
 
         snake_size = float(len(snake_positions)) / (bw * bh) 
 
-        body_set = {tuple(p) for p in snake_positions[1:]}
-
-        dx, dy = _dir_to_vec(direction)
+        dx, dy   = _DIR_TO_VEC[state["direction"]]
         rdx, rdy = _rotate_cw(dx, dy)
         ldx, ldy = _rotate_ccw(dx, dy)
 
-        body_ahead = cls._body_dist(hx, hy,  dx,  dy, body_set, bw, bh)
-        body_left  = cls._body_dist(hx, hy, ldx, ldy, body_set, bw, bh)
-        body_right = cls._body_dist(hx, hy, rdx, rdy, body_set, bw, bh)
-
-        wall_ahead  = cls._wall_dist(hx, hy,  dx,  dy, bw, bh)
-        wall_behind = cls._wall_dist(hx, hy, -dx, -dy, bw, bh)
-        wall_left   = cls._wall_dist(hx, hy, ldx, ldy, bw, bh)
-        wall_right  = cls._wall_dist(hx, hy, rdx, rdy, bw, bh)
-
-        direction_x = float(dx)
-        direction_y = float(dy)
-
-        rel_x = ax - hx
-        rel_y = ay - hy
-
-        apple_fwd  = rel_x * dx + rel_y * dy
-        apple_side = rel_x * rdx + rel_y * rdy
-
-        apple_ahead_val = (1.0 / apple_fwd) if apple_fwd != 0 else 0.0
-        apple_side_val = (1.0 / apple_side) if apple_side != 0 else 0.0
-
-        return np.array([
-            body_ahead, body_right, body_left,
-            wall_ahead, wall_behind, wall_right, wall_left,
-            direction_x, direction_y,
-            apple_ahead_val, apple_side_val,
-            snake_size
-        ], dtype=np.float64)
+        body_list = snake_positions[1:]
+        body = (
+            np.array(body_list, dtype=np.int64).reshape(-1, 2)
+            if body_list
+            else np.empty((0, 2), dtype=np.int64)
+        )
+        return _nb_compute_obs(
+            hx, hy, dx, dy, rdx, rdy, ldx, ldy,
+            ax, ay, bw, bh, snake_size, body,
+        )
 
     @staticmethod
     def _body_dist(hx: int, hy: int, dx: int, dy: int, body_set: set, bw: int, bh: int) -> float:
@@ -105,6 +138,10 @@ class ObservationWrapper:
         steps_y = (bh - 1 - hy) if dy > 0 else (hy if dy < 0 else float("inf"))
         steps = min(steps_x, steps_y)
         return 1.0 / steps if steps > 0 else 1.0
+
+# ---------------------------------------------------------------------------
+# Neural Network
+# ---------------------------------------------------------------------------
 
 class NeuralNetwork:
     def __init__(self, layer_sizes: list[int]):
@@ -159,6 +196,17 @@ class NeuralNetwork:
         nn.biases = [np.array(b, dtype=np.float64) for b in data["biases"]]
         return nn
 
+# ---------------------------------------------------------------------------
+# Checkpoint filenames
+# ---------------------------------------------------------------------------
+
+_CKPT_DIR     = "./checkpoints"
+_META_FILE    = "GeneticAlgorithm_meta.json"
+_WEIGHTS_FILE = "GeneticAlgorithm_weights"
+
+# ---------------------------------------------------------------------------
+# Genetic Agent
+# ---------------------------------------------------------------------------
 
 class GeneticAgent(Agent):
     display_name = "Genetic Algorithm"
@@ -172,7 +220,8 @@ class GeneticAgent(Agent):
         mutation_strength: float = 0.2,
         min_mutation_strength: float = 0.05,
         mut_stren_dropoff: int = 40,
-        tournament_size: int = 5
+        tournament_size: int = 5,
+        save_interval: int = 20
     ):
         self.trainable = True
         self.pop_size = pop_size
@@ -192,6 +241,9 @@ class GeneticAgent(Agent):
         self.min_mutation_strength = min_mutation_strength
         self.mut_stren_dropoff = mut_stren_dropoff
         self.tournament_size = tournament_size
+        self.save_interval = save_interval
+
+        self._best_score_ever: int = 0
 
         self.load()
 
@@ -202,12 +254,11 @@ class GeneticAgent(Agent):
  
     def get_action(self, state: dict) -> Direction | None:
         obs    = ObservationWrapper.observation_from_state(state)
-        nn     = self.population[self.current_idx]
-        output = nn.forward(obs)
+        output = self.population[self.current_idx].forward(obs)
 
         action_idx = int(np.argmax(output))
+        dx, dy = _DIR_TO_VEC[state["direction"]]
 
-        dx, dy = _dir_to_vec(state["direction"])
         if action_idx == 0:
             new_dx, new_dy = _rotate_ccw(dx, dy)
         elif action_idx == 1:
@@ -215,7 +266,7 @@ class GeneticAgent(Agent):
         else:
             new_dx, new_dy = dx, dy
 
-        return _vec_to_dir(new_dx, new_dy)
+        return _VEC_TO_DIR[(new_dx, new_dy)]
 
     def on_episode_end(self, stats: dict):
         score = stats.get("score", 0)
@@ -228,9 +279,23 @@ class GeneticAgent(Agent):
 
 
     def on_generation_end(self, gen_stats):
-        print(f"[GeneticAlgorithm] Gen {self.generation} | Best Score: {max(self.scores)} | Avg Score: {sum(self.scores) / len(self.scores)} | Best Fitness: {max(self.fitness_scores):.1f} | Avg Fitness: {sum(self.fitness_scores) / len(self.fitness_scores)}")
+        gen_best = max(self.scores)
+        is_new_best = gen_best > self._best_score_ever
+        if is_new_best:
+            self._best_score_ever = gen_best
 
-        ranked = sorted(zip(self.fitness_scores, self.population), key=lambda x: x[0], reverse=True)
+        print(
+            f"[GeneticAlgorithm] Gen {self.generation} | "
+            f"Best Score: {gen_best} | "
+            f"Avg Score: {sum(self.scores) / len(self.scores)} | "
+            f"Best Fitness: {max(self.fitness_scores):.1f} | "
+            f"Avg Fitness: {sum(self.fitness_scores) / len(self.fitness_scores)}"
+        )
+
+        ranked = sorted(
+            zip(self.fitness_scores, self.population), 
+            key=lambda x: x[0], reverse=True
+        )
 
         new_population: list[NeuralNetwork] = []
 
@@ -253,7 +318,7 @@ class GeneticAgent(Agent):
         self.current_idx = 0
         self.generation += 1
 
-        self.save()
+        self.save(force=is_new_best)
 
     @classmethod
     def load_stats(cls) -> dict:
@@ -288,56 +353,77 @@ class GeneticAgent(Agent):
     # Persistence
     # ---------------------------------------------------------------------------
 
-    def save(self):
+    def save(self, force: bool = False):
+        if not force and (self.generation % self.save_interval != 0):
+            return
+
+        os.makedirs(_CKPT_DIR, exist_ok=True)
+
         state = {
             "agent": "GeneticAlgorithm",
             "version": _SCHEMA_VERSION,
             "generation": self.generation,
+            "best_score_ever": self._best_score_ever,
             "hyperparameters": {
-                "pop_size":          self.pop_size,
-                "elite_count":       self.elite_count,
-                "mutation_rate":     self.mutation_rate,
-                "mutation_strength": self.mutation_strength,
-                "tournament_size":   self.tournament_size,
-                "layer_sizes":       self.layer_sizes
+                "pop_size":              self.pop_size,
+                "elite_count":           self.elite_count,
+                "mutation_rate":         self.mutation_rate,
+                "mutation_strength":     self.mutation_strength,
+                "min_mutation_strength": self.min_mutation_strength,
+                "mut_stren_dropoff":     self.mut_stren_dropoff,
+                "tournament_size":       self.tournament_size,
+                "layer_sizes":           self.layer_sizes,
+                "save_interval":         self.save_interval
             },
-            "population_weights": [nn.get_flat().tolist() for nn in self.population]
         }
-        os.makedirs("./checkpoints", exist_ok=True)
-        file_path = os.path.join("./checkpoints", f"{"GeneticAlgorithm"}.json")
+        
+        file_path = os.path.join(_CKPT_DIR, _META_FILE)
         with open(file_path, "w") as f:
-            json.dump(state, f)
-        #print(f"[GeneticAlgorithm] Generation {self.generation} saved to {file_path}")
+            json.dump(state, f, indent=2)
+
+        weights_matrix = np.array(
+            [nn.get_flat() for nn in self.population], dtype=np.float64
+        )
+        np.savez_compressed(os.path.join(_CKPT_DIR, _WEIGHTS_FILE), weights=weights_matrix)        
 
     def load(self):
-        file_path = os.path.join("./checkpoints", f"{"GeneticAlgorithm"}.json")
-        if not os.path.exists(file_path):
-            return
+        meta_path    = os.path.join(_CKPT_DIR, _META_FILE)
+        weights_path = os.path.join(_CKPT_DIR, _WEIGHTS_FILE + ".npz")
 
-        try:
-            with open(file_path, "r") as f:
-                state = json.load(f)
+        if not os.path.exists(meta_path):
+            print("[GeneticAlgorithm] No available save file found.")
+            return            
 
-            agent = state.get("agent", "GeneticAlgorithm")
-            if agent != "GeneticAlgorithm":
-                raise "[Load] Agent missmatch"
-            version = state.get("version", _SCHEMA_VERSION)
-            if version != _SCHEMA_VERSION:
-                raise "[Load] Schema version missmatch"
+        with open(meta_path, "r") as f:
+            meta = json.load(f)
 
-            self.generation =        state.get("generation", 1)
-            hyperparameters =        state.get("hyperparameters", {})
-            self.pop_size =          hyperparameters.get("pop_size", 50)
-            self.elite_count =       hyperparameters.get("elite_count", 5)
-            self.mutation_rate =     hyperparameters.get("mutation_rate", 0.15)
-            self.mutation_strength = hyperparameters.get("mutation_strength", 0.2)
-            self.tournament_size =   hyperparameters.get("tournament_size", 5)
-            self.layer_sizes =       hyperparameters.get("layer_sizes", [9, 15, 10, 4])
+        if meta.get("agent") != "GeneticAlgorithm":
+            raise ValueError("Agent mismatch in checkpoint metadata.")
+        if meta.get("version") != _SCHEMA_VERSION:
+            raise ValueError(
+                f"Schema version mismatch: expected {_SCHEMA_VERSION}, "
+                f"got {meta.get('version')}."
+            )
 
-            weights_list = state.get("population_weights", [])
-            for i, weights in enumerate(weights_list):
-                if i < len(self.population):
-                    self.population[i].set_flat(np.array(weights))
+        self.generation        = meta.get("generation", 1)
+        self._best_score_ever  = meta.get("best_score_ever", 0)
 
-        except Exception as e:
-            print(f"[GeneticAlgorithm] Failed to load state: {e}")
+        hp = meta.get("hyperparameters", {})
+        self.pop_size               = hp.get("pop_size",               self.pop_size)
+        self.elite_count          = hp.get("elite_count",          self.elite_count)
+        self.mutation_rate        = hp.get("mutation_rate",        self.mutation_rate)
+        self.mutation_strength    = hp.get("mutation_strength",    self.mutation_strength)
+        self.min_mutation_strength= hp.get("min_mutation_strength",self.min_mutation_strength)
+        self.mut_stren_dropoff    = hp.get("mut_stren_dropoff",    self.mut_stren_dropoff)
+        self.tournament_size      = hp.get("tournament_size",      self.tournament_size)
+        self.layer_sizes          = hp.get("layer_sizes",          self.layer_sizes)
+        self.save_interval        = hp.get("save_interval",        self.save_interval)
+
+        while len(self.population) < self.pop_size:
+            self.population.append(NeuralNetwork(self.layer_sizes))
+        self.population = self.population[:self.pop_size]
+
+        npz = np.load(weights_path)
+        for i, flat in enumerate(npz["weights"]):
+            if i < len(self.population):
+                self.population[i].set_flat(flat)

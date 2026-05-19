@@ -1,0 +1,21 @@
+{
+  "agent": "GeneticAlgorithm",
+  "version": 3.0,
+  "generation": 860,
+  "best_score_ever": 118,
+  "hyperparameters": {
+    "pop_size": 200,
+    "elite_count": 5,
+    "mutation_rate": 0.1,
+    "mutation_strength": 0.2,
+    "min_mutation_strength": 0.05,
+    "mut_stren_dropoff": 40,
+    "tournament_size": 5,
+    "layer_sizes": [
+      12,
+      16,
+      3
+    ],
+    "save_interval": 20
+  }
+}
