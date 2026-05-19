@@ -3,9 +3,14 @@ import threading
 from dataclasses import dataclass, field
 from typing import Callable
 
-from agents.base_agent import Agent
+from agents.base_agent import Agent, PopulationAgent
+from playing.evaluator import EnvConfig, evaluate_genome
 from playing.session import Session
 from envs.snake_env import SnakeEnv
+
+# ---------------------------------------------------------------------------
+# Stubs
+# ---------------------------------------------------------------------------
 
 _NULL_ACTIONS: dict = {
     "QUIT":        False,
@@ -88,6 +93,9 @@ class TrainerConfig:
             env_height=env_height
         )
 
+    def as_env_config(self) -> EnvConfig:
+        return EnvConfig(width=self.env_width, height=self.env_height)
+
 # ---------------------------------------------------------------------------
 # Trainer
 # ---------------------------------------------------------------------------
@@ -110,7 +118,6 @@ class Trainer:
 
         self._stop_event = threading.Event()
         self._history: list[GenerationStats] = []
-        self._best_score: int = 0
         self._generation: int = 0
 
     # ---------------------------------------------------------------------------
@@ -153,61 +160,54 @@ class Trainer:
         return list(self._history)
 
     # ---------------------------------------------------------------------------
-    # Interval
+    # Dispatch generation
+    # ---------------------------------------------------------------------------
+
+    def _run_generation(self, gen_num: int, run_start: float) -> GenerationStats:
+        if isinstance(self.agent, PopulationAgent):
+            return self._run_generation_population(gen_num, run_start)
+        raise NotImplementedError
+
+    # ---------------------------------------------------------------------------
+    # Population-based path
+    # ---------------------------------------------------------------------------
+        
+    def _run_generation_population(self, gen_num: int, run_start: float) -> GenerationStats:
+        population = self.agent.get_population()
+        env_cfg = self.config.as_env_config()
+        gen_start = time.monotonic()
+
+        results: list[dict] = []
+        for genome in population:
+            if self._should_stop(run_start):
+                break
+            results.append(evaluate_genome(genome, env_cfg))
+
+        if results:
+            self.agent.evolve(results)
+
+        return GenerationStats(
+            generation=gen_num,
+            scores=[r["score"] for r in results],
+            total_rewards=[r["total_reward"] for r in results],
+            steps=[r["steps"] for r in results],
+            duration_seconds=time.monotonic() - gen_start,
+        )
+
+    # ---------------------------------------------------------------------------
+    # Helpers
     # ---------------------------------------------------------------------------
 
     def _should_stop(self, run_start: float) -> bool:
         if self._stop_event.is_set():
             return True
-
-        if self.config.max_generations is not None and self._generation > self.config.max_generations:
+        if self.config.max_generations is not None and self._generation >= self.config.max_generations:
             return True
-
         if self.config.time_limit_minutes is not None:
             elapsed = (time.monotonic() - run_start) / 60.0
             if elapsed >= self.config.time_limit_minutes:
                 return True
-
         return False
-
-    def _run_generation(self, gen_nun: int, run_start: float) -> GenerationStats:
-        n_episodes = getattr(self.agent, "episodes_per_generation", 1)
-        scores, rewards, steps = [], [], []
-        gen_start = time.monotonic()
-
-        for _ in range(n_episodes):
-            if self._should_stop(run_start):
-                break
-            
-            result = self._run_episode()
-            if result["aborted"]:
-                self.stop()
-                break
-
-            self._call(self.agent, "on_episode_end", result)
-            
-            scores.append(result["score"])
-            rewards.append(result["total_reward"])
-            steps.append(result["steps"])
-        
-        return GenerationStats(
-            generation=gen_nun,
-            scores=scores,
-            total_rewards=rewards,
-            steps=steps,
-            duration_seconds=time.monotonic() - gen_start
-        )
-
-    def _run_episode(self) -> dict:
-        env = SnakeEnv(width=self.config.env_width, height=self.config.env_height)
-        session = Session(
-            agent = self.agent,
-            env=env,
-            input_handler=_NullInputHandler(),
-            clock=None,
-            render_fn=None
-        )
-        return session.run()
 
     @staticmethod
     def _call(obj, method: str, *args) -> None:

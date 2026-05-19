@@ -3,7 +3,7 @@ import random
 import json
 import os
 import numba
-from agents.base_agent import Agent
+from agents.base_agent import Agent, Genome, PopulationAgent
 from core.snake import Direction, _is_opposite
 
 _SCHEMA_VERSION = 3.0
@@ -80,12 +80,6 @@ _DIR_TO_VEC: dict[Direction, tuple[int, int]] = {
 
 _VEC_TO_DIR: dict[tuple[int, int], Direction] = {v: k for k, v in _DIR_TO_VEC.items()}
 
-def _dir_to_vec(direction: Direction) -> tuple[int, int]:
-    return _DIR_TO_VEC[direction]
-
-def _vec_to_dir(dx: int, dy: int) -> Direction:
-    return _VEC_TO_DIR[(dx, dy)]
-
 def _rotate_cw(dx: int, dy: int) -> tuple[int, int]:
     return (-dy, dx)
 
@@ -120,24 +114,6 @@ class ObservationWrapper:
             hx, hy, dx, dy, rdx, rdy, ldx, ldy,
             ax, ay, bw, bh, snake_size, body,
         )
-
-    @staticmethod
-    def _body_dist(hx: int, hy: int, dx: int, dy: int, body_set: set, bw: int, bh: int) -> float:
-        steps = 1
-        while True:
-            nx, ny = hx + dx * steps, hy + dy * steps
-            if not (0 <= nx < bw and 0 <= ny < bh):
-                return 0.0
-            if (nx, ny) in body_set:
-                return 1.0 / steps
-            steps += 1
-
-    @staticmethod
-    def _wall_dist(hx: int, hy: int, dx: int, dy: int, bw: int, bh: int) -> float:
-        steps_x = (bw - 1 - hx) if dx > 0 else (hx if dx < 0 else float("inf"))
-        steps_y = (bh - 1 - hy) if dy > 0 else (hy if dy < 0 else float("inf"))
-        steps = min(steps_x, steps_y)
-        return 1.0 / steps if steps > 0 else 1.0
 
 # ---------------------------------------------------------------------------
 # Neural Network
@@ -197,6 +173,36 @@ class NeuralNetwork:
         return nn
 
 # ---------------------------------------------------------------------------
+# Shared helper
+# ---------------------------------------------------------------------------
+
+def _nn_act(nn: NeuralNetwork, state: dict) -> Direction:
+    obs = ObservationWrapper.observation_from_state(state)
+    output = nn.forward(obs)
+    action_idx = int(np.argmax(output))
+
+    dx, dy = _DIR_TO_VEC[state["direction"]]
+    if action_idx == 0:
+        new_dx, new_dy = _rotate_ccw(dx, dy)
+    elif action_idx == 1:
+        new_dx, new_dy = _rotate_cw(dx, dy)
+    else:
+        new_dx, new_dy = dx, dy
+
+    return _VEC_TO_DIR[(new_dx, new_dy)]
+
+# ---------------------------------------------------------------------------
+# GeneticGenome
+# ---------------------------------------------------------------------------
+
+class GeneticGenome(Genome):
+    def __init__(self, nn: NeuralNetwork) -> None:
+        self._nn = nn
+
+    def get_action(self, state: dict) -> Direction:
+        return _nn_act(self._nn, state)
+
+# ---------------------------------------------------------------------------
 # Checkpoint filenames
 # ---------------------------------------------------------------------------
 
@@ -208,7 +214,7 @@ _WEIGHTS_FILE = "GeneticAlgorithm_weights"
 # Genetic Agent
 # ---------------------------------------------------------------------------
 
-class GeneticAgent(Agent):
+class GeneticAgent(PopulationAgent):
     display_name = "Genetic Algorithm"
     description = "Evolves a fixed-topology network by selecting and mutating the fittest agents."
 
@@ -228,12 +234,7 @@ class GeneticAgent(Agent):
         self.layer_sizes = [12, 16, 3]
 
         self.population = [NeuralNetwork(self.layer_sizes) for _ in range(pop_size)]
-        self.fitness_scores = [0.0] * pop_size
-        self.scores = [0] * pop_size
-        self.current_idx = 0
         self.generation = 1
-
-        self.episodes_per_generation = pop_size
 
         self.elite_count = elite_count
         self.mutation_rate = mutation_rate
@@ -244,57 +245,32 @@ class GeneticAgent(Agent):
         self.save_interval = save_interval
 
         self._best_score_ever: int = 0
+        self._play_nn: NeuralNetwork = self.population[0]
 
         self.load()
 
     # ---------------------------------------------------------------------------
-    # API
+    # PopulationAgent
     # ---------------------------------------------------------------------------
 
- 
-    def get_action(self, state: dict) -> Direction | None:
-        obs    = ObservationWrapper.observation_from_state(state)
-        output = self.population[self.current_idx].forward(obs)
+    def get_population(self) -> list[GeneticGenome]:
+        return [GeneticGenome(nn) for nn in self.population]
 
-        action_idx = int(np.argmax(output))
-        dx, dy = _DIR_TO_VEC[state["direction"]]
+    def evolve(self, results: list[dict]) -> None:
+        fitness_scores = [self._compute_fitness(r) for r in results]
+        scores         = [r["score"] for r in results]
 
-        if action_idx == 0:
-            new_dx, new_dy = _rotate_ccw(dx, dy)
-        elif action_idx == 1:
-            new_dx, new_dy = _rotate_cw(dx, dy)
-        else:
-            new_dx, new_dy = dx, dy
-
-        return _VEC_TO_DIR[(new_dx, new_dy)]
-
-    def on_episode_end(self, stats: dict):
-        score = stats.get("score", 0)
-        steps = stats.get("steps", 0)
-
-        fitness = (score * 5000) - (steps * 2) + 1000
-        self.fitness_scores[self.current_idx] = fitness
-        self.scores[self.current_idx] = score
-        self.current_idx += 1
-
-
-    def on_generation_end(self, gen_stats):
-        gen_best = max(self.scores)
+        gen_best = max(scores)
         is_new_best = gen_best > self._best_score_ever
         if is_new_best:
             self._best_score_ever = gen_best
 
-        print(
-            f"[GeneticAlgorithm] Gen {self.generation} | "
-            f"Best Score: {gen_best} | "
-            f"Avg Score: {sum(self.scores) / len(self.scores)} | "
-            f"Best Fitness: {max(self.fitness_scores):.1f} | "
-            f"Avg Fitness: {sum(self.fitness_scores) / len(self.fitness_scores)}"
-        )
+        self._log_generation(scores, fitness_scores)
 
         ranked = sorted(
-            zip(self.fitness_scores, self.population), 
-            key=lambda x: x[0], reverse=True
+            zip(fitness_scores, self.population),
+            key=lambda x: x[0],
+            reverse=True,
         )
 
         new_population: list[NeuralNetwork] = []
@@ -307,18 +283,21 @@ class GeneticAgent(Agent):
             p2 = self._tournament_select(ranked)
 
             child_weights = self._mutate(self._crossover(p1, p2))
-
             child = NeuralNetwork(self.layer_sizes)
             child.set_flat(child_weights)
             new_population.append(child)
-
+ 
         self.population = new_population
-        self.fitness_scores = [0.0] * self.pop_size
-        self.scores = [0] * self.pop_size
-        self.current_idx = 0
         self.generation += 1
-
+ 
         self.save(force=is_new_best)
+
+    # ---------------------------------------------------------------------------
+    # BaseAgent
+    # ---------------------------------------------------------------------------
+ 
+    def get_action(self, state: dict) -> Direction:
+        return _nn_act(self._play_nn, state)
 
     @classmethod
     def load_stats(cls) -> dict:
@@ -331,6 +310,11 @@ class GeneticAgent(Agent):
     # ---------------------------------------------------------------------------
     # Evolution
     # ---------------------------------------------------------------------------
+
+    def _compute_fitness(self, result: dict) -> float:
+        score = result.get("score", 0)
+        steps = result.get("steps", 0)
+        return (score * 5000) - (steps * 2) + 1000
 
     def _tournament_select(self, ranked: list) -> NeuralNetwork:
         contestants = random.sample(ranked, min(self.tournament_size, len(ranked)))
@@ -348,6 +332,19 @@ class GeneticAgent(Agent):
         noise = np.random.randn(len(weights)) * mut_stren
         weights[mutation_mask] += noise[mutation_mask]
         return weights
+
+    # ---------------------------------------------------------------------------
+    # Logging
+    # ---------------------------------------------------------------------------
+
+    def _log_generation(self, scores: list[int], fitness_scores: list[float]) -> None:
+        print(
+            f"[GeneticAgent] Gen {self.generation} | "
+            f"Best Score: {max(scores)} | "
+            f"Avg Score: {sum(scores) / len(scores):.2f} | "
+            f"Best Fitness: {max(fitness_scores):.1f} | "
+            f"Avg Fitness: {sum(fitness_scores) / len(fitness_scores):.1f}"
+        )
 
     # ---------------------------------------------------------------------------
     # Persistence
@@ -409,15 +406,15 @@ class GeneticAgent(Agent):
         self._best_score_ever  = meta.get("best_score_ever", 0)
 
         hp = meta.get("hyperparameters", {})
-        self.pop_size               = hp.get("pop_size",               self.pop_size)
-        self.elite_count          = hp.get("elite_count",          self.elite_count)
-        self.mutation_rate        = hp.get("mutation_rate",        self.mutation_rate)
-        self.mutation_strength    = hp.get("mutation_strength",    self.mutation_strength)
-        self.min_mutation_strength= hp.get("min_mutation_strength",self.min_mutation_strength)
-        self.mut_stren_dropoff    = hp.get("mut_stren_dropoff",    self.mut_stren_dropoff)
-        self.tournament_size      = hp.get("tournament_size",      self.tournament_size)
-        self.layer_sizes          = hp.get("layer_sizes",          self.layer_sizes)
-        self.save_interval        = hp.get("save_interval",        self.save_interval)
+        self.pop_size             = hp.get("pop_size",              self.pop_size)
+        self.elite_count          = hp.get("elite_count",           self.elite_count)
+        self.mutation_rate        = hp.get("mutation_rate",         self.mutation_rate)
+        self.mutation_strength    = hp.get("mutation_strength",     self.mutation_strength)
+        self.min_mutation_strength= hp.get("min_mutation_strength", self.min_mutation_strength)
+        self.mut_stren_dropoff    = hp.get("mut_stren_dropoff",     self.mut_stren_dropoff)
+        self.tournament_size      = hp.get("tournament_size",       self.tournament_size)
+        self.layer_sizes          = hp.get("layer_sizes",           self.layer_sizes)
+        self.save_interval        = hp.get("save_interval",         self.save_interval)
 
         while len(self.population) < self.pop_size:
             self.population.append(NeuralNetwork(self.layer_sizes))
@@ -427,3 +424,5 @@ class GeneticAgent(Agent):
         for i, flat in enumerate(npz["weights"]):
             if i < len(self.population):
                 self.population[i].set_flat(flat)
+
+        self._play_nn = self.population[0]
