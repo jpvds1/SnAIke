@@ -1,6 +1,10 @@
+import os
 import time
 import threading
+import multiprocessing as mp
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
+from itertools import repeat
 from typing import Callable
 
 from agents.base_agent import Agent, PopulationAgent
@@ -71,6 +75,13 @@ class TrainerConfig:
     time_limit_minutes: float | None = None
     env_width: int = 20
     env_height: int = 20
+    n_workers: int | None = None
+
+    @property
+    def resolved_workers(self) -> int:
+        if self.n_workers is not None:
+            return max(1, self.n_workers)
+        return max(1, (os.cpu_count() - 2) or 1)
 
     @classmethod
     def from_ui(
@@ -79,18 +90,21 @@ class TrainerConfig:
         limit: int | float,
         *,
         env_width: int = 20,
-        env_height: int = 20
+        env_height: int = 20,
+        n_workers: int | None = None
     ) -> "TrainerConfig":
         if limit_mode == "time":
             return cls(
                 time_limit_minutes=float(limit),
                 env_width=env_width,
-                env_height=env_height
+                env_height=env_height,
+                n_workers=n_workers
             )
         return cls(
             max_generations=int(limit),
             env_width=env_width,
-            env_height=env_height
+            env_height=env_height,
+            n_workers=n_workers
         )
 
     def as_env_config(self) -> EnvConfig:
@@ -120,6 +134,8 @@ class Trainer:
         self._history: list[GenerationStats] = []
         self._generation: int = 0
 
+        self._executor: ProcessPoolExecutor | None = None
+
     # ---------------------------------------------------------------------------
     # Public API
     # ---------------------------------------------------------------------------
@@ -129,16 +145,17 @@ class Trainer:
         self._history.clear()
         self._generation = 0
 
+        use_parallel = (
+            isinstance(self.agent, PopulationAgent)
+            and self.config.resolved_workers > 1
+        )
+
+        if use_parallel:
+            self._run_with_pool()
+        else:
+            self._run_loop()
+
         run_start = time.monotonic()
-
-        while not self._should_stop(run_start):
-            self._generation += 1
-            stats = self._run_generation(self._generation, run_start)
-            self._history.append(stats)
-
-            self._call(self.agent, "on_generation_end", stats)
-            if self._on_generation_end:
-                self._on_generation_end(stats)
 
         self._call(self.agent, "on_training_end", self._history)
         return self._history
@@ -150,6 +167,8 @@ class Trainer:
 
     def stop(self) -> None:
         self._stop_event.set()
+        if self._executor is not None:
+            self._executor.shutdown(wait=False, cancel_futures=True)
 
     @property
     def current_generation(self) -> int:
@@ -158,6 +177,30 @@ class Trainer:
     @property
     def history(self) -> list[GenerationStats]:
         return list(self._history)
+
+    # ---------------------------------------------------------------------------
+    # Pool lifecycle
+    # ---------------------------------------------------------------------------
+
+    def _run_with_pool(self) -> None:
+        n = self.config.resolved_workers
+        ctx = mp.get_context("spawn")
+
+        with ProcessPoolExecutor(max_workers=n, mp_context=ctx) as executor:
+            self._executor = executor
+            try:
+                self._run_loop()
+            finally:
+                self._executor = None
+
+    def _run_loop(self) -> None:
+        run_start = time.monotonic()
+        while not self._should_stop(run_start):
+            self._generation += 1
+            stats = self._run_generation(self._generation, run_start)
+            self._history.append(stats)
+            if self._on_generation_end:
+                self._on_generation_end(stats)
 
     # ---------------------------------------------------------------------------
     # Dispatch generation
@@ -177,11 +220,7 @@ class Trainer:
         env_cfg = self.config.as_env_config()
         gen_start = time.monotonic()
 
-        results: list[dict] = []
-        for genome in population:
-            if self._should_stop(run_start):
-                break
-            results.append(evaluate_genome(genome, env_cfg))
+        results = self._evaluate_population(population, env_cfg)
 
         if results:
             self.agent.evolve(results)
@@ -193,6 +232,29 @@ class Trainer:
             steps=[r["steps"] for r in results],
             duration_seconds=time.monotonic() - gen_start,
         )
+
+    def _evaluate_population(self, population: list, env_cfg: EnvConfig) -> list[dict]:
+        if self._executor is None:
+            return [evaluate_genome(g, env_cfg) for g in population]
+
+        n         = self.config.resolved_workers
+        chunksize = max(1, len(population) // (n * 4))
+
+        try:
+            results = list(
+                self._executor.map(
+                    evaluate_genome,
+                    population,
+                    repeat(env_cfg),
+                    chunksize=chunksize,
+                )
+            )
+        except Exception as e:
+            print(f"[Trainer] Worker exception during evaluation: {e}")
+            print("[Trainer] Falling back to sequential evalutaion")
+            results = [evaluate_genome(g, env_cfg) for g in population]
+        
+        return results
 
     # ---------------------------------------------------------------------------
     # Helpers

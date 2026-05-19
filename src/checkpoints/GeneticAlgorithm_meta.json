@@ -1,8 +1,8 @@
 {
   "agent": "GeneticAlgorithm",
   "version": 3.0,
-  "generation": 860,
-  "best_score_ever": 118,
+  "generation": 1680,
+  "best_score_ever": 136,
   "hyperparameters": {
     "pop_size": 200,
     "elite_count": 5,
