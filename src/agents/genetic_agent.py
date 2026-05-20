@@ -314,7 +314,8 @@ class GeneticAgent(PopulationAgent):
     def _compute_fitness(self, result: dict) -> float:
         score = result.get("score", 0)
         steps = result.get("steps", 0)
-        return (score * 5000) - (steps * 2) + 1000
+        fitness = steps + score ** 4 - ((steps **  1.5) / (score + 1))
+        return max(0.1, fitness)
 
     def _tournament_select(self, ranked: list) -> NeuralNetwork:
         contestants = random.sample(ranked, min(self.tournament_size, len(ranked)))
