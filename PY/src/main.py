@@ -14,7 +14,7 @@ from agents.qlearning_agent import QLearningAgent
 from agents.random_agent import RandomAgent
 
 FRAME_RATE = 10
-SCALE_RATIO = 4
+SCALE_RATIO = 2
 SCREEN_WIDTH = 200
 SCREEN_HEIGHT = 200
 
