@@ -50,3 +50,10 @@ struct GymState {
     float reward;
     bool done;
 };
+
+struct RunResult {
+    float totalReward;
+    int score;
+    int steps;
+    bool aborted;
+};

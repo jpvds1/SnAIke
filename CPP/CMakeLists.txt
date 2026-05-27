@@ -14,6 +14,8 @@ set(SOURCE_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/helpers.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/snake.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/engine.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/env.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/session.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
 )
 
