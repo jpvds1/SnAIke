@@ -2,7 +2,10 @@
 
 #pragma once
 
+#include <optional>
+
 #include "types.h"
+#include "helpers.h"
 
 class Snake {
 public:
@@ -11,6 +14,8 @@ public:
     Position getHead() const;
     Direction getDirection() const;
     std::vector<Position> getPositions() const;
-    void move(Direction dir, bool apple);
+    void move(std::optional<Direction> dir, bool apple);
     bool getCannibalism() const;
+private:
+    std::vector<BodyUnit> body;
 };
