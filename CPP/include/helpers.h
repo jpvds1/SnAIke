@@ -2,9 +2,13 @@
 
 #pragma once
 
+#include <vector>
+
 #include "types.h"
 
 bool isOpposite(Direction dir1, Direction dir2);
+
+std::vector<double> vectorMatrixMultiplication(const std::vector<double>& vec, const std::vector<std::vector<double>>& mat);
 
 constexpr Position directionOffset(Direction dir)
 {

@@ -2,17 +2,20 @@
 
 #pragma once
 
-#include<vector>
+#include <vector>
+#include <random>
+
+#include "helpers.h"
 
 class NeuralNetwork {
 public:
     NeuralNetwork(std::vector<int> layerSizes);
 
-    std::vector<float> forward(std::vector<float> x) const;
-    std::vector<float> getFlat() const;
-    void setFlat(std::vector<float>); 
+    std::vector<double> forward(std::vector<double> x) const;
+    std::vector<double> getFlat() const;
+    void setFlat(const std::vector<double>& flat); 
 private:
     std::vector<int> layerSizer;
-    std::vector<float> weights;
-    std::vector<float> biases;
+    std::vector<std::vector<std::vector<double>>> weights;
+    std::vector<std::vector<double>> biases;
 };
