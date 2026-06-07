@@ -13,14 +13,22 @@ enum class Direction {
     RIGHT
 };
 
-struct Position {
+struct Vector2D {
     int x;
     int y;
 
-    bool operator==(const Position& other) const {
-        return x == other.x && y == other.y;
+    bool operator==(const Vector2D& other) const { return x == other.x && y == other.y; }
+    bool operator!=(const Vector2D& other) const { return !(*this == other); }
+
+    Vector2D rotateCW() const { return {-y, x}; }
+    Vector2D rotateCCW() const { return {y, -x}; }
+
+    int manhattanDistance(const Vector2D& other) const {
+        return std::abs(x - other.x) + std::abs(y - other.y);
     }
 };
+
+using Position = Vector2D;
 
 struct PositionHash {
     std::size_t operator()(const Position& p) const {

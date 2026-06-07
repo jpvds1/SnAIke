@@ -1,22 +1,20 @@
 #include "neuralNetwork.h"
 
-NeuralNetwork::NeuralNetwork(std::vector<int> layerSizes) {
-    this->layerSizer = layerSizer;
-
+NeuralNetwork::NeuralNetwork(std::vector<int> layerSizes) : layerSizes(layerSizes) {
     static std::random_device rd;
     static std::mt19937 gen(rd());
     std::normal_distribution<double> standard_normal(0.0, 1.0);
 
-    for (int i = 0; i < (layerSizer.size() - 1); i++) {
+    for (int i = 0; i < (layerSizes.size() - 1); i++) {
         int rows = layerSizes[i];
         int cols = layerSizes[i + 1];
 
         double scalingFactor = std::sqrt(2.0 / rows);
 
-        std::vector<std::vector<double>> w(rows, std::vector<double>(cols));
+        Matrix w(rows, cols);
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
-                w[r][c] = standard_normal(gen) * scalingFactor;
+                w(r, c) = standard_normal(gen) * scalingFactor;
             }
         }
 
@@ -43,17 +41,14 @@ std::vector<double> NeuralNetwork::forward(std::vector<double> x) const {
             }
         }
     }
-
     return x;
 }
 
 std::vector<double> NeuralNetwork::getFlat() const {
     std::vector<double> flat;
 
-    for (const auto& layer : weights) {
-        for (const auto& row : layer) {
-            flat.insert(flat.end(), row.begin(), row.end());
-        }
+    for (const auto& mat : weights) {
+        flat.insert(flat.end(), mat.data.begin(), mat.data.end());
     }
 
     for (const auto& layer : biases) {
@@ -66,11 +61,9 @@ std::vector<double> NeuralNetwork::getFlat() const {
 void NeuralNetwork::setFlat(const std::vector<double>& flat) {
     size_t idx = 0;
 
-    for (auto& layer : weights) {
-        for (auto& row : layer) {
-            for (auto& val : row) {
-                val = flat[idx++];
-            }
+    for (auto& mat : weights) {
+        for (auto& val : mat.data) {
+            val = flat[idx++];
         }
     }
 
