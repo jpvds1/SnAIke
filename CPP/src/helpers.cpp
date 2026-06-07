@@ -1,4 +1,4 @@
-#include "helpers.h"
+#include "../include/helpers.h"
 
 bool isOpposite(Direction dir1, Direction dir2) {
     switch (dir1) {
@@ -10,7 +10,7 @@ bool isOpposite(Direction dir1, Direction dir2) {
     }
 }
 
-constexpr Position directionOffset(Direction dir) {
+Position directionOffset(Direction dir) {
     switch (dir) {
         case Direction::UP:    return {0, -1};
         case Direction::DOWN:  return {0, 1};
@@ -23,8 +23,8 @@ constexpr Position directionOffset(Direction dir) {
 std::vector<double> vectorMatrixMultiplication(const std::vector<double>& vec, const Matrix& mat) {
     std::vector<double> result(mat.cols, 0.0);
 
-    for (size_t c = 0; c < mat.cols; c++) {
-        for (size_t r = 0; r < mat.rows; r++) {
+    for (size_t c = 0; c < (size_t)mat.cols; c++) {
+        for (size_t r = 0; r < (size_t)mat.rows; r++) {
             result[c] += vec[r] * mat(r, c);
         }
     }
@@ -47,15 +47,8 @@ double computeRay(Position head, Position dir, Position boardSize, std::vector<P
             return 0.0;
         }
 
-        bool isOccupied = false;
         for (int i = 1; i < snakePositions.size(); ++i) {
-            if (snakePositions[i] == checkPos) {
-                isOccupied = true;
-                break;
-            }
-        }
-        if (isOccupied) {
-            return 1.0 / s;
+            if (snakePositions[i] == checkPos) return 1.0 / s;
         }
         s++;
     }
@@ -63,14 +56,14 @@ double computeRay(Position head, Position dir, Position boardSize, std::vector<P
 
 double computeWall(Position head, Position dir, Position boardSize) {
     int INF = boardSize.x * boardSize.y + 1;
-    int sx = (dir.x > 0) ? (boardSize.x - 1 - head.x) : ((dir.x < 0) ? head.x : INF);
-    int sy = (dir.y > 0) ? (boardSize.y - 1 - head.y) : ((dir.y < 0) ? head.y : INF);
-    int s = (sx < sy) ? sx : sy;
+    int sx  = (dir.x > 0) ? (boardSize.x - 1 - head.x) : ((dir.x < 0) ? head.x : INF);
+    int sy  = (dir.y > 0) ? (boardSize.y - 1 - head.y) : ((dir.y < 0) ? head.y : INF);
+    int s   = (sx < sy) ? sx : sy;
     return (s > 0) ? (1.0 / s) : 1.0;
 }
 
 std::vector<double> getObservation(const State& state) {
-    double snake_size = static_cast<double>(state.snakePositions.size()) / (state.boardSize.x * size.boardSize.y);
+    double snake_size = static_cast<double>(state.snakePositions.size()) / (state.boardSize.x * state.boardSize.y);
 
     Position fwdVec = directionOffset(state.direction);
     Position rgtVec = fwdVec.rotateCW();
@@ -91,5 +84,8 @@ std::vector<double> getObservation(const State& state) {
     double av = (afwd != 0.0) ? (1.0 / afwd) : 0.0;
     double asv = (aside != 0.0) ? (1.0 / aside) : 0.0;
 
-    return {ba, br, bl, wa, wb, wr, wl, static_cast<double>(fwdVec.x), static_cast<double>(fwdVec.y), av, asv, snake_size};
+    return {ba, br, bl, wa, wb, wr, wl, 
+        static_cast<double>(fwdVec.x), 
+        static_cast<double>(fwdVec.y), 
+        av, asv, snake_size};
 }

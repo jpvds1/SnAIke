@@ -20,7 +20,6 @@ public:
     virtual ~Agent() = default;
 
     virtual std::optional<Direction> getAction(State state) = 0;
-    static std::vector<std::string> loadStats();
 };
 
 

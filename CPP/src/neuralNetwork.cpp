@@ -1,4 +1,4 @@
-#include "neuralNetwork.h"
+#include "../include/neuralNetwork.h"
 
 NeuralNetwork::NeuralNetwork(std::vector<int> layerSizes) : layerSizes(layerSizes) {
     static std::random_device rd;
@@ -18,10 +18,8 @@ NeuralNetwork::NeuralNetwork(std::vector<int> layerSizes) : layerSizes(layerSize
             }
         }
 
-        std::vector<double> b(cols, 0.0);
-
         weights.push_back(w);
-        biases.push_back(b); 
+        biases.push_back(std::vector<double>(cols, 0.0)); 
     }
 }
 

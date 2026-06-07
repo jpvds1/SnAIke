@@ -1,4 +1,4 @@
-#include "session.h"
+#include "../include/session.h"
 
 Session::Session(std::unique_ptr<Agent> agent, SnakeEnv env) 
     : agent(std::move(agent)), env(env) {}

@@ -14,6 +14,7 @@ public:
     Position getHead() const;
     Direction getDirection() const;
     std::vector<Position> getPositions() const;
+    
     void move(std::optional<Direction> dir, bool apple);
     bool getCannibalism() const;
 private:

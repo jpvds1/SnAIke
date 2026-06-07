@@ -20,6 +20,10 @@ struct Vector2D {
     bool operator==(const Vector2D& other) const { return x == other.x && y == other.y; }
     bool operator!=(const Vector2D& other) const { return !(*this == other); }
 
+    Vector2D operator+(const Vector2D& o) const {return {x + o.x, y + o.y}; }
+    Vector2D operator-(const Vector2D& o) const {return {x - o.x, y - o.y}; }
+    Vector2D operator*(int s)             const {return {x * s, y * s}; }
+
     Vector2D rotateCW() const { return {-y, x}; }
     Vector2D rotateCCW() const { return {y, -x}; }
 
@@ -34,6 +38,17 @@ struct PositionHash {
     std::size_t operator()(const Position& p) const {
         return std::hash<int>()(p.x) ^ (std::hash<int>()(p.y) << 1);
     }
+};
+
+struct Matrix {
+    int rows;
+    int cols;
+    std::vector<double> data;
+
+    Matrix() : rows(0), cols(0) {}
+    Matrix(int r, int c) : rows(r), cols(c), data(r * c, 0.0) {}
+    double& operator()(int r, int c) { return data[r * cols + c]; }
+    const double& operator()(int r, int c) const { return data[r * cols + c]; }
 };
 
 struct BodyUnit {

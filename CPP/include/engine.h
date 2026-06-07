@@ -15,9 +15,9 @@
 #include "helpers.h"
 #include "types.h"
 
-#define REWARD_APPLE 1.0
-#define REWARD_STEP 0.0
-#define REWARD_DEATH -1.0
+constexpr float REWARD_APPLE = 1.0f;
+constexpr float REWARD_STEP = 0.0f;
+constexpr float REWARD_DEATH = -1.0f;
 
 class Engine {
 public:

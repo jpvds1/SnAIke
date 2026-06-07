@@ -21,5 +21,4 @@ public:
 private:
     std::unique_ptr<Agent> agent;
     SnakeEnv env;
-    int frame_rate;
 };

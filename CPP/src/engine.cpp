@@ -1,24 +1,16 @@
 #include "../include/engine.h"
 
-Engine::Engine() : snake({0, 0}) {
-    width = 20;
-    height = 20;
-    state.boardSize = {width, height};
+Engine::Engine() : width(20), height(20), snake({width / 2, height / 2}) {
     reset();
 }
 
 State Engine::reset() {
-    Position start;
-    start.x = width / 2;
-    start.y = height / 2;
-    
+    Position start{width / 2, height / 2};
     snake = Snake(start);
 
+    state = State{};
+    state.boardSize = {width, height};
     state.apple = spawnApple().value_or({0, 0});
-    state.score = 0;
-    state.steps = 0;
-    state.hunger = 0;
-    state.done = false;
     return getState();
 }
 
@@ -61,8 +53,8 @@ GymState Engine::update(std::optional<Direction> dir) {
 
     return GymState{
         .state = getState(),
-        .reward = 0.0f,
-        .done = true
+        .reward = stepReward,
+        .done = state.done
     };
 }
 
@@ -82,23 +74,16 @@ Position Engine::nextHead(std::optional<Direction> dir) {
         finalDir = snakeDir;
     }
 
-    Position snakePos = snake.getHead();
+    Position head = snake.getHead();
     Position offsets = directionOffset(finalDir);
-    return Position{
-        .x = snakePos.x + offsets.x,
-        .y = snakePos.y + offsets.y
-    };
+    return {head.x + offsets.x, head.y + offsets.y};
 }
 
 bool Engine::isDead() const {
-    Position snakePos = snake.getHead();
-    int x = snakePos.x;
-    int y = snakePos.y;
-    if (!(
-        (0 <= x && x < width)
-        &&
-        (0 <= y && y < height)
-    )) return true;
+    Position head = snake.getHead();
+    if (head.x < 0 || head.x >= width ||
+        head.y < 0 || head.y >= height)
+        return true;
 
     return snake.getCannibalism();
 }
@@ -112,10 +97,8 @@ std::optional<Position> Engine::spawnApple() {
 
     for (int x = 0; x < width; ++x) {
         for (int y = 0; y < height; ++y) {
-            Position p{x, y};
-
-            if (!occupied.contains(p)) {
-                freeCells.push_back(p);
+            if (!occupied.count({x, y})) {
+                freeCells.push_back({x, y});
             }
         }
     }
@@ -128,6 +111,5 @@ std::optional<Position> Engine::spawnApple() {
     static std::mt19937 gen(rd());
 
     std::uniform_int_distribution<size_t> dist(0, freeCells.size() - 1);
-
     return freeCells[dist(gen)];
 }
