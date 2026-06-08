@@ -34,7 +34,7 @@ private:
     NeuralNetwork nn;
 };
 
-class GeneticAgent : public PopulationAgent, public Agent {
+class GeneticAgent : public PopulationAgent {
 public:
     GeneticAgent(
         int popSize = 200,

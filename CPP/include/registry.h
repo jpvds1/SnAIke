@@ -20,7 +20,7 @@ struct AgentEntry {
 
     std::vector<std::pair<std::string, std::string>> paramDefs;
 
-    std::function<std::unique_ptr<PopulationAgent>(const ParamMap&)> factory;
+    std::function<std::unique_ptr<Agent>(const ParamMap&)> factory;
 };
 
 // ------------------------------------------------------------
@@ -28,11 +28,13 @@ struct AgentEntry {
 // ------------------------------------------------------------
 
 inline int paramInt (const ParamMap& p, const std::string& k, int def) {
-    auto it = p.find(k); return (it != p.end() && !it->second.empty()) ? std::stoi(it->second) : def;
+    auto it = p.find(k); 
+    return (it != p.end() && !it->second.empty()) ? std::stoi(it->second) : def;
 }
 
 inline double paramDouble(const ParamMap& p, const std::string& k, double def) {
-    auto it = p.find(k); return (it != p.end() && !it->second.empty()) ? std::stod(it->second) : def;
+    auto it = p.find(k); 
+    return (it != p.end() && !it->second.empty()) ? std::stod(it->second) : def;
 }
 
 // ------------------------------------------------------------
@@ -54,7 +56,7 @@ inline std::vector<AgentEntry> makeRegistry() {
                 {"tournament_size",       "5"},
                 {"save_interval",         "20"}
             },
-            .factory = [](const ParamMap& p) -> std::unique_ptr<PopulationAgent> {
+            .factory = [](const ParamMap& p) -> std::unique_ptr<Agent> {
                 return std::make_unique<GeneticAgent>(
                     paramInt   (p, "pop_size",              200),
                     paramInt   (p, "elite_count",           5),

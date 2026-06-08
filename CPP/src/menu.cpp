@@ -1,7 +1,4 @@
 #include "../include/menu.h"
-#include <ios>
-#include <limits>
-#include <memory>
 #include <string>
 
 // --------------------------------------------------------------------------------------
@@ -60,8 +57,7 @@ static ParamMap editParams(const AgentEntry& entry) {
         printSeparator();
         std::cout << "Hyperparameters for \"" << entry.name << "\" (Enter to keep default):\n\n";
         for (const auto& [key, def] : entry.paramDefs) {
-            std::string val = promptString(key, params[key]);
-            params[key] = val;
+            params[key] = promptString(key, params[key]);
         }
 
         printSeparator();
@@ -82,41 +78,88 @@ static ParamMap editParams(const AgentEntry& entry) {
 }
 
 // --------------------------------------------------------------------------------------
-// Training settings
+// Training limit selection
 // --------------------------------------------------------------------------------------
 
-static int selectGenerations() {
+static TrainerConfig selectTrainerConfig() {
+    TrainerConfig config;
+
     while (true) {
         printSeparator();
-        std::cout << "How many generations to train? [100]: ";
-        std::string line;
-        std::getline(std::cin, line);
-        if (line.empty()) return 100;
-        try {
-            int n = std::stoi(line);
-            if (n > 0) return n;
-        } catch (...) {}
-        std::cout << " Please enter a positive integer.\n";
+        std::cout << "Training limit\n\n"
+                  << "  [1] Generation limit\n"
+                  << "  [2] Time limit (minutes)\n"
+                  << "  [3] both\n\n"
+                  << "Choice: ";
+        int c;
+        if (std::cin >> c && c >= 1 && c <= 3) {
+            clearInput();
+
+            if (c == 1 || c == 3) {
+                while (true) {
+                    std::cout << "  Max generations [100]: ";
+                    std::string line;
+                    std::getline(std::cin, line);
+                    if (line.empty()) { 
+                        config.maxGenerations = 100; 
+                        break; 
+                    }
+                    try {
+                        int n = std::stoi (line);
+                        if (n > 0) {
+                            config.maxGenerations = n;
+                            break;
+                        }
+                    } catch (...) {}
+                    std::cout << "  Please enter a positive integer.\n";
+                }
+            }
+
+            if (c == 2 || c == 3) {
+                while (true) {
+                    std::cout << "  Time limit in minutes [10.0]: ";
+                    std::string line;
+                    std::getline(std::cin, line);
+                    if (line.empty()) {
+                        config.timeLimitMinutes = 10.0;
+                        break;
+                    }
+                    try {
+                        double t = std::stod(line);
+                        if (t > 0.0) {
+                            config.timeLimitMinutes = t;
+                            break;
+                        }
+                    } catch (...) {}
+                    std::cout << "  Plea enter a positive number.\n";
+                }
+            }
+            break;
+        }
+        clearInput();
+        std::cout << "  Invalid choice, try again.\n";
     }
+    return config;
 }
 
 // --------------------------------------------------------------------------------------
 // Public
 // --------------------------------------------------------------------------------------
 
-std::unique_ptr<PopulationAgent> runMenu(
-    const std::vector<AgentEntry>& registry,
-    int& trainGenerations
-) {
+MenuResult runMenu(const std::vector<AgentEntry> &registry) {
     std::cout << "\n======== Snake Training ========\n";
 
-    const AgentEntry& entry = selectAgent(registry);
-    ParamMap params = editParams(entry);
-    trainGenerations = selectGenerations();
+    const AgentEntry& entry  = selectAgent(registry);
+    ParamMap          params = editParams(entry);
+    TrainerConfig     config = selectTrainerConfig();
 
     printSeparator();
-    std::cout << "\nStarting training: " << entry.name
-              << " for " << trainGenerations << " generations.\n\n";
 
-    return entry.factory(params);
+    std::cout << "\nStarting training: " << entry.name << "\n";
+    if (config.maxGenerations)
+        std::cout << "  Max generations: " << *config.maxGenerations << "\n";
+    if (config.timeLimitMinutes)
+        std::cout << "  Time limit: " << *config.timeLimitMinutes << " min\n";
+
+    return { entry.factory(params), config };
 }

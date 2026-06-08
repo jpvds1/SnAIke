@@ -133,7 +133,11 @@ mutationStrength(mutationStrength),
 minMutationStrength(minMutationStrength),
 mutStrenDropoff(mutStrenDropoff),
 tournamentSize(tournamentSize),
-saveInterval(saveInterval) {
+saveInterval(saveInterval),
+generation(0),
+bestScoreEver(0),
+layerSizes({12, 16, 3}) {
+    load();
     population.reserve(popSize);
     for (int i = 0; i < popSize; i++) {
         population.push_back(NeuralNetwork(layerSizes));
@@ -391,10 +395,6 @@ void GeneticAgent::load() {
         if (!ls.empty())
             const_cast<std::vector<int>&>(layerSizes) = ls;
     }
-
-    while (static_cast<int>(population.size()) < popSize)
-        population.emplace_back(layerSizes);
-    population.resize(popSize, NeuralNetwork(layerSizes));
 
     std::ifstream wf(weightsPath, std::ios::binary);
     if (!wf.is_open()) {

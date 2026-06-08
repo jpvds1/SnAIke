@@ -7,6 +7,7 @@
 #include "./include/menu.h"
 #include "./include/env.h"
 #include "include/agent.h"
+#include "include/trainer.h"
 #include "include/types.h"
 
 // ---------------------------------------------------------------------------
@@ -21,11 +22,22 @@ static void printUsage(const std::vector<AgentEntry>& registry) {
     for (const auto& e: registry) {
         std::cout << "  " << e.name << "\n    " << e.description << "\n\n"
                   << "     Params (key=default):\n";
-    }
-    for (const auto& e : registry)
         for (const auto& [k, def] : e.paramDefs)
             std::cout << "      " << k << "=" << def << "\n";
-    std::cout << "        generations=100\n";
+        std::cout << "\n";
+    }
+
+    std::cout <<
+        "  Training limits (at least on required):\n"
+        "    generations=<N>     stop after N generation\n"
+        "    time_minutes=<F>    stop after F minutes\n\n"
+        "  Environment:\n"
+        "    env_width=20\n"
+        "    env_height=20\n\n"
+        "  Example:\n"
+        "    snake genetic generations=200 mutation_rate=0.15\n"
+        "    snake genetic time_minutes=5\n"
+        "    snake genetic generations=100 time_minutes=2\n";
 }
 
 static ParamMap parseArgs(int argc, char* argv[], int startIdx) {
@@ -43,34 +55,31 @@ static ParamMap parseArgs(int argc, char* argv[], int startIdx) {
     return params;
 }
 
-// ---------------------------------------------------------------------------
-// Training loop
-// ---------------------------------------------------------------------------
+static TrainerConfig buildConfig(ParamMap& params) {
+    TrainerConfig config;
 
-static void train(PopulationAgent& agent, int trainGenerations) {
-    for (int gen = 0; gen < trainGenerations; gen++) {
-        auto& population = agent.getPopulation();
-        std::vector<State> results;
-        results.reserve(population.size());
+    auto genIt  = params.find("generations");
+    auto timeIt = params.find("time_minutes");
 
-        for (auto& genome : population) {
-            SnakeEnv env;
-            State obs = env.reset();
-            bool done = false;
-
-            while (!done) {
-                auto action = genome->getAction(obs);
-                GymState gs = env.step(action);
-                obs = gs.state;
-                done = gs.done;
-            }
-            results.push_back(env.getLastState());
-        }
-
-        agent.evolve(results);
+    if (genIt != params.end()) {
+        config.maxGenerations = std::stoi(genIt->second);
+        params.erase(genIt);
+    }
+    if (timeIt != params.end()) {
+        config.timeLimitMinutes = std::stod(timeIt->second);
+        params.erase(timeIt);
     }
 
-    std::cout << "[main] Training complete.\n";
+    if (auto it = params.find("env_width"); it != params.end()) {
+        config.envWidth = std::stoi(it->second);
+        params.erase(it);
+    }
+    if (auto it = params.find("env_height"); it != params.end()) {
+        config.envHeight = std::stoi(it->second);
+        params.erase(it);
+    }
+
+    return config;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,11 +89,13 @@ static void train(PopulationAgent& agent, int trainGenerations) {
 int main(int argc, char* argv[]) {
     auto registry = makeRegistry();
 
-    std::unique_ptr<PopulationAgent> agent;
-    int trainGenerations = 100;
+    std::unique_ptr<Agent> agent;
+    TrainerConfig                    config;
 
     if (argc == 1) {
-        agent = runMenu(registry, trainGenerations);
+        MenuResult result = runMenu(registry);
+        agent = std::move(result.agent);
+        config = result.config;
     } else {
         std::string agentName(argv[1]);
 
@@ -104,11 +115,20 @@ int main(int argc, char* argv[]) {
         }
 
         ParamMap params = parseArgs(argc, argv, 2);
-        trainGenerations = paramInt(params, "generations", 100);
-        params.erase("generations");
+        config = buildConfig(params);
 
-        std::cout << "[main] Agent: " << entry->name
-                  << " | Generations: " << trainGenerations << "\n";
+        if (!config.maxGenerations && !config.timeLimitMinutes) {
+            std::cerr << "[main] Error: specify at least one of "
+                         "generations=<N> or time_minutes=<F>.\n\n";
+            printUsage(registry);
+            return 1;
+        }
+
+        std::cout << "[main] Agent: " << entry->name << "\n";
+        if (config.maxGenerations)
+            std::cout << "  Max generations: " << *config.maxGenerations << "\n";
+        if (config.timeLimitMinutes)
+            std::cout << "  Time limit:" << *config.timeLimitMinutes << "\n";
         for (const auto& [k, v] : params)
             std::cout << "  " << k << " = " << v << "\n";
         std::cout << "\n";
@@ -116,6 +136,8 @@ int main(int argc, char* argv[]) {
         agent = entry->factory(params);
     }
 
-    train(*agent, trainGenerations);
+    Trainer trainer(*agent, config);
+    trainer.run();
+    
     return 0;
 }

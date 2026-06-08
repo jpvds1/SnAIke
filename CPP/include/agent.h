@@ -20,13 +20,15 @@ public:
     virtual ~Agent() = default;
 
     virtual std::optional<Direction> getAction(State state) = 0;
+    virtual void train(std::vector<State> results) = 0;
 };
 
 
-class PopulationAgent {
+class PopulationAgent : public Agent {
 public:
     virtual ~PopulationAgent() = default;
 
     virtual std::vector<std::unique_ptr<Genome>>& getPopulation() = 0;
+    void train(std::vector<State> results) override { evolve(std::move(results)); }
     virtual void evolve(std::vector<State> results) = 0;
 };
