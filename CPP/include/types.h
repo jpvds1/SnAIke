@@ -5,6 +5,7 @@
 #include <vector>
 #include <cstddef>
 #include <functional>
+#include <cmath>
 
 enum class Direction {
     UP,

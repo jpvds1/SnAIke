@@ -1,12 +1,4 @@
 #include "../include/geneticAgent.h"
-#include <cctype>
-#include <cstddef>
-#include <fstream>
-#include <ios>
-#include <iterator>
-#include <sstream>
-#include <stdexcept>
-#include <string>
 
 static constexpr const char* CKPT_DIR      = "./checkpoints";
 static constexpr const char* META_FILE     = "GeneticAlgorithm_meta.json";
@@ -114,11 +106,8 @@ std::optional<Direction> GeneticGenome::getAction(State state) {
     Position fwd = directionOffset(state.direction);
     Position choice = fwd;
 
-    if (action_idx == 0) {
-        choice = fwd.rotateCCW();
-    } else if (action_idx == 1) {
-        choice = fwd.rotateCW();
-    }
+    if      (action_idx == 0) choice = fwd.rotateCCW();
+    else if (action_idx == 1) choice = fwd.rotateCW();
 
     return vecToDir(choice);
 }
@@ -145,6 +134,7 @@ minMutationStrength(minMutationStrength),
 mutStrenDropoff(mutStrenDropoff),
 tournamentSize(tournamentSize),
 saveInterval(saveInterval) {
+    population.reserve(popSize);
     for (int i = 0; i < popSize; i++) {
         population.push_back(NeuralNetwork(layerSizes));
     }

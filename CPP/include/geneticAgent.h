@@ -12,6 +12,13 @@
 #include <fstream>
 #include <sstream>
 #include <filesystem>
+#include <cctype>
+#include <cstddef>
+#include <ios>
+#include <iterator>
+#include <stdexcept>
+#include <string>
+
 
 #include "agent.h"
 #include "neuralNetwork.h"

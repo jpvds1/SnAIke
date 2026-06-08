@@ -39,7 +39,7 @@ Direction vecToDir(Position offset) {
     return Direction::UP;
 }
 
-double computeRay(Position head, Position dir, Position boardSize, std::vector<Position>& snakePositions) {
+double computeRay(Position head, Position dir, Position boardSize, const std::vector<Position>& snakePositions) {
     int s = 1;
     while (true) {
         Position checkPos = head + (dir * s);

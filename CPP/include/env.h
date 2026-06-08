@@ -9,7 +9,7 @@
 
 class SnakeEnv {
 public:
-    SnakeEnv();
+    SnakeEnv() = default;
     
     State reset();
     GymState step(std::optional<Direction> dir);
