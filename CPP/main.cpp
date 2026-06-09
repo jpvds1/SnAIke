@@ -5,10 +5,8 @@
 
 #include "./include/registry.h"
 #include "./include/menu.h"
-#include "./include/env.h"
 #include "include/agent.h"
 #include "include/trainer.h"
-#include "include/types.h"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -34,9 +32,11 @@ static void printUsage(const std::vector<AgentEntry>& registry) {
         "  Environment:\n"
         "    env_width=20\n"
         "    env_height=20\n\n"
+        "  Parallelism:\n"
+        "    workers=<N>         parallel evaluation workers (0 = auto)\n\n"
         "  Example:\n"
         "    snake genetic generations=200 mutation_rate=0.15\n"
-        "    snake genetic time_minutes=5\n"
+        "    snake genetic time_minutes=5 workers=8\n"
         "    snake genetic generations=100 time_minutes=2\n";
 }
 
@@ -76,6 +76,10 @@ static TrainerConfig buildConfig(ParamMap& params) {
     }
     if (auto it = params.find("env_height"); it != params.end()) {
         config.envHeight = std::stoi(it->second);
+        params.erase(it);
+    }
+    if (auto it = params.find("workers"); it != params.end()) {
+        config.nWorkers = std::stoi(it->second);
         params.erase(it);
     }
 
@@ -129,6 +133,7 @@ int main(int argc, char* argv[]) {
             std::cout << "  Max generations: " << *config.maxGenerations << "\n";
         if (config.timeLimitMinutes)
             std::cout << "  Time limit:" << *config.timeLimitMinutes << "\n";
+        std::cout << "  Workers: " << config.resolvedWorkers() << "\n";
         for (const auto& [k, v] : params)
             std::cout << "  " << k << " = " << v << "\n";
         std::cout << "\n";
@@ -138,6 +143,6 @@ int main(int argc, char* argv[]) {
 
     Trainer trainer(*agent, config);
     trainer.run();
-    
+
     return 0;
 }

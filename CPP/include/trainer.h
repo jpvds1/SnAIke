@@ -13,6 +13,8 @@
 #include <numeric>
 #include <sstream>
 #include <stdexcept>
+#include <thread>
+#include <future>
 
 #include "agent.h"
 #include "types.h"
@@ -45,6 +47,14 @@ struct TrainerConfig {
 
     int envWidth = 20;
     int envHeight = 20;
+
+    int nWorkers = 0;
+
+    int resolvedWorkers() const {
+        if (nWorkers > 0) return nWorkers;
+        unsigned int hw = std::thread::hardware_concurrency();
+        return static_cast<int>(hw > 0 ? hw : 1);
+    }
 };
 
 // ---------------------------------------------------------------------------
@@ -77,7 +87,13 @@ private:
     GenerationStats runGeneration(int genNum, TimePoint runStart);
     GenerationStats runPopulationGeneration(PopulationAgent& agent, int genNum, TimePoint runStart);
     GenerationStats runSingleGeneration(Agent& agent, int genNum, TimePoint runStart);
-    std::vector<State> evaluatePopulation(std::vector<std::unique_ptr<Genome>>& population);
+
+    std::vector<State> evaluatePopulation(
+        std::vector<std::unique_ptr<Genome>>& population);
+    std::vector<State> evaluatePopulationParallel(
+        std::vector<std::unique_ptr<Genome>>& population);
+    std::vector<State> evaluatePopulationSequential(
+        std::vector<std::unique_ptr<Genome>>& population);
 
     State runEpisode(Genome& genome);
     State runEpisode(Agent& agent);

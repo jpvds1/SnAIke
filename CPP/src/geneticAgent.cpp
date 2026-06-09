@@ -138,11 +138,13 @@ generation(0),
 bestScoreEver(0),
 layerSizes({12, 16, 3}) {
     load();
-    population.reserve(popSize);
-    for (int i = 0; i < popSize; i++) {
-        population.push_back(NeuralNetwork(layerSizes));
+    if (population.empty()) {
+        population.reserve(popSize);
+        for (int i = 0; i < popSize; i++) {
+            population.push_back(NeuralNetwork(layerSizes));
+        }
     }
-    load();
+    
     updateGenomePopulation();
 }
 
@@ -316,7 +318,7 @@ void GeneticAgent::save(bool force) {
     lsArr << "]";
 
     meta << "{\n"
-         << "  \"agent\": \"GeneticAlgorithm\",\n"
+         << "  \"agent\": \"GeneticAgent\",\n"
          << "  \"version\": " << SCHEMA_VERSION << ",\n"
          << "  \"generation\": " << generation << ",\n"
          << "  \"best_score_ever\": " << bestScoreEver << ",\n"
@@ -386,14 +388,20 @@ void GeneticAgent::load() {
         mutationRate        = jsonGetDouble(hpRaw, "mutation_rate", mutationRate);
         mutationStrength    = jsonGetDouble(hpRaw, "mutation_strength", mutationStrength);
         minMutationStrength = jsonGetDouble(hpRaw, "min_mutation_strength", minMutationStrength);
-        mutStrenDropoff     = jsonGetInt(hpRaw, "min_stren_dropoff", mutStrenDropoff);
+        mutStrenDropoff     = jsonGetInt(hpRaw, "mut_stren_dropoff", mutStrenDropoff);
         tournamentSize      = jsonGetInt(hpRaw, "tournament_size", tournamentSize);
-        saveInterval        = jsonGetInt(hpRaw, "save_intervael", saveInterval);
+        saveInterval        = jsonGetInt(hpRaw, "save_interval", saveInterval);
 
         std::string lsRaw = jsonGetRaw(hpRaw, "layer_sizes");
         auto ls = jsonParseIntArray(lsRaw);
         if (!ls.empty())
             const_cast<std::vector<int>&>(layerSizes) = ls;
+    }
+
+    population.clear();
+    population.reserve(popSize);
+    for (int i = 0; i < popSize; i++) {
+        population.push_back(NeuralNetwork(layerSizes));
     }
 
     std::ifstream wf(weightsPath, std::ios::binary);

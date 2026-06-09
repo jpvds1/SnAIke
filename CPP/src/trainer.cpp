@@ -1,6 +1,8 @@
 #include "../include/trainer.h"
 #include <algorithm>
 #include <chrono>
+#include <cstddef>
+#include <future>
 #include <iomanip>
 #include <memory>
 #include <numeric>
@@ -67,6 +69,12 @@ std::vector<GenerationStats> Trainer::run() {
     history_.clear();
     generation = 0;
 
+    const int workers = config.resolvedWorkers();
+    std::cout << "[Trainer] Starting - workers=" << workers;
+    if (config.maxGenerations) std::cout << "  max_gen=" << *config.maxGenerations;
+    if (config.timeLimitMinutes) std::cout << "  time_limit=" << *config.timeLimitMinutes << "min";
+    std::cout << "\n";
+
     const TimePoint runStart = Clock::now();
 
     while (!shouldStop(runStart)) {
@@ -115,7 +123,7 @@ GenerationStats Trainer::runPopulationGeneration(PopulationAgent& agent, int gen
     const auto genStart = Clock::now();
 
     auto& population = agent.getPopulation();
-    std::vector<State> results = evaluatePopulation(population);
+    std::vector<State> results = evaluatePopulationParallel(population);
 
     agent.train(results);
 
@@ -159,6 +167,61 @@ std::vector<State> Trainer::evaluatePopulation(std::vector<std::unique_ptr<Genom
         results.push_back(runEpisode(*genome));
     }
 
+    return results;
+}
+
+std::vector<State> Trainer::evaluatePopulationParallel(std::vector<std::unique_ptr<Genome>>& population) {
+    const int nWorkers = config.resolvedWorkers();
+    const size_t popSize = population.size();
+    const size_t batchSize = static_cast<size_t>(nWorkers);
+
+    std::vector<State> results(popSize);
+    bool fellBack = false;
+
+    for (size_t batchStart = 0; batchStart < popSize; batchStart += batchSize) {
+        const size_t batchEnd = std::min(batchStart + batchSize, popSize);
+
+        std::vector<std::future<State>> futures;
+        futures.reserve(batchEnd - batchStart);
+
+        for (size_t i = batchStart; i < batchEnd; i++) {
+            Genome* g = population[i].get();
+            futures.push_back(
+                std::async(std::launch::async, [this, g]() { return runEpisode(*g); })
+            );
+        }
+
+        for (size_t i = 0; i < futures.size(); i++) {
+            try {
+                results[batchStart + i] = futures[i].get();
+            } catch (const std::exception& e) {
+                if (!fellBack) {
+                    std::cerr << "[Trainer] Worker exception: " << e.what()
+                              << " - falling back to sequential evaluation.\n";
+                    fellBack = true;
+                }
+
+                for (size_t j = i + 1; j < futures.size(); j++)
+                    try { futures[j].get(); } catch (...) {}
+
+                for (size_t k = batchStart + i; k < popSize; k++)
+                    results[k] = runEpisode(*population[k]);
+
+                    return results;
+            }
+        }
+
+        if (fellBack) break;
+    }
+
+    return results;
+}
+
+std::vector<State> Trainer::evaluatePopulationSequential(std::vector<std::unique_ptr<Genome>>& population) {
+    std::vector<State> results;
+    results.reserve(population.size());
+    for (auto& genome : population)
+        results.push_back(runEpisode(*genome));
     return results;
 }
 

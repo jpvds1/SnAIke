@@ -139,6 +139,20 @@ static TrainerConfig selectTrainerConfig() {
         clearInput();
         std::cout << "  Invalid choice, try again.\n";
     }
+
+    printSeparator();
+    const int hw = config.resolvedWorkers();
+    std::string def = std::to_string(hw);
+    std::cout << "Parallel workers\n\n";
+    while (true) {
+        std::string val = promptString("Workers (0 = auto)", def);
+        try {
+            int n = std::stoi(val);
+            if (n >= 0) { config.nWorkers = n; break; }
+        } catch (...) {}
+        std::cout << "  Please enter a non-negative integer.\n";
+    }
+
     return config;
 }
 
