@@ -5,6 +5,7 @@ Snake::Snake(Position pos) {
         .pos = pos,
         .dir = Direction::RIGHT
     });
+    occupiedPositions.insert(pos);
 }
 
 Position Snake::getHead() const {
@@ -37,22 +38,20 @@ void Snake::move(std::optional<Direction> dir, bool apple) {
         case Direction::RIGHT: new_pos.x++; break;
     }
 
-    body.insert(body.begin(), {
+    selfCollision = occupiedPositions.count(new_pos) > 0;
+
+    body.push_front({
         .pos = new_pos,
         .dir = actualDir
     });
+    occupiedPositions.insert(new_pos);
 
     if (!apple) {
+        occupiedPositions.erase(body.back().pos);
         body.pop_back();
     }
 }
 
 bool Snake::getCannibalism() const {
-    Position head = getHead();
-
-    for (int i = 1; i < body.size(); i++) {
-        if (body[i].pos == head) return true;
-    }
-
-    return false;
+    return selfCollision;
 }

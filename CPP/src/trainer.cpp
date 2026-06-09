@@ -7,6 +7,7 @@
 #include <memory>
 #include <numeric>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 // ---------------------------------------------------------------------------
@@ -233,8 +234,8 @@ State Trainer::runEpisode(Genome& genome) {
     while (!done) {
         auto action = genome.getAction(obs);
         GymState gs = env.step(action);
-        obs = gs.state;
         done = gs.done;
+        obs = std::move(gs.state);
     }
 
     return env.getLastState();
@@ -248,8 +249,8 @@ State Trainer::runEpisode(Agent& agent) {
     while (!done) {
         auto action = agent.getAction(obs);
         GymState gs = env.step(action);
-        obs = gs.state;
         done = gs.done;
+        obs = std::move(gs.state);
     }
 
     return env.getLastState();

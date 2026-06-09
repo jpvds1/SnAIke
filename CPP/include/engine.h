@@ -32,6 +32,7 @@ private:
     int height;
     State state;
     Snake snake;
+    std::mt19937 rng;
 
     Position nextHead(std::optional<Direction> dir);
     bool isDead() const;

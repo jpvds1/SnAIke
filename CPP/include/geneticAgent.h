@@ -68,6 +68,8 @@ private:
     std::vector<NeuralNetwork> population;
     std::vector<std::unique_ptr<Genome>> genomePopulation;
 
+    std::mt19937 gen;
+
     // Evolution
     double computeFitness(const State& results) const;
     int tournamentSelect(const std::vector<std::pair<double, size_t>>& ranked);

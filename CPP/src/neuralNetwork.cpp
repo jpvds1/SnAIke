@@ -1,25 +1,34 @@
 #include "../include/neuralNetwork.h"
+#include <cmath>
+#include <random>
 
 NeuralNetwork::NeuralNetwork(std::vector<int> layerSizes) : layerSizes(layerSizes) {
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    std::normal_distribution<double> standard_normal(0.0, 1.0);
-
     for (int i = 0; i < (layerSizes.size() - 1); i++) {
         int rows = layerSizes[i];
         int cols = layerSizes[i + 1];
 
-        double scalingFactor = std::sqrt(2.0 / rows);
-
         Matrix w(rows, cols);
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
-                w(r, c) = standard_normal(gen) * scalingFactor;
+                w(r, c) = 0.0;
             }
         }
 
         weights.push_back(w);
         biases.push_back(std::vector<double>(cols, 0.0)); 
+    }
+}
+
+void NeuralNetwork::randomize(std::mt19937& gen) {
+    std::normal_distribution<double> standard_normal(0.0, 1.0);
+
+    for (int i = 0; i < weights.size(); i++) {
+        int rows = layerSizes[i];
+        double scalingFactor = std::sqrt(2.0 / rows);
+
+        for (auto& val : weights[i].data) {
+            val = standard_normal(gen) * scalingFactor;
+        }
     }
 }
 

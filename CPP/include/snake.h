@@ -3,6 +3,8 @@
 #pragma once
 
 #include <optional>
+#include <deque>
+#include <unordered_set>
 
 #include "types.h"
 #include "helpers.h"
@@ -18,5 +20,7 @@ public:
     void move(std::optional<Direction> dir, bool apple);
     bool getCannibalism() const;
 private:
-    std::vector<BodyUnit> body;
+    std::deque<BodyUnit> body;
+    std::unordered_set<Position, PositionHash> occupiedPositions;
+    bool selfCollision = false;
 };

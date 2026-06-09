@@ -1,4 +1,5 @@
 #include "../include/geneticAgent.h"
+#include <random>
 
 static constexpr const char* CKPT_DIR      = "./checkpoints";
 static constexpr const char* META_FILE     = "GeneticAlgorithm_meta.json";
@@ -136,12 +137,15 @@ tournamentSize(tournamentSize),
 saveInterval(saveInterval),
 generation(0),
 bestScoreEver(0),
-layerSizes({12, 16, 3}) {
+layerSizes({12, 16, 3}),
+gen(std::random_device{}()) {
     load();
     if (population.empty()) {
         population.reserve(popSize);
         for (int i = 0; i < popSize; i++) {
-            population.push_back(NeuralNetwork(layerSizes));
+            NeuralNetwork nn(layerSizes);
+            nn.randomize(this->gen);
+            population.push_back(nn);
         }
     }
     
@@ -244,8 +248,6 @@ double GeneticAgent::computeFitness(const State& result) const {
 }
 
 int GeneticAgent::tournamentSelect(const std::vector<std::pair<double, size_t>>& ranked) {
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
     std::uniform_int_distribution<size_t> dis(0, ranked.size() - 1);
 
     size_t bestIdx = dis(gen);
@@ -266,8 +268,6 @@ std::vector<double> GeneticAgent::crossover(const NeuralNetwork& p1, const Neura
     std::vector<double> w2 = p2.getFlat();
     std::vector<double> childFlat(w1.size());
 
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
     std::uniform_real_distribution<double> dis(0.0, 1.0);
 
     for (size_t i = 0; i < w1.size(); i++) {
@@ -277,8 +277,6 @@ std::vector<double> GeneticAgent::crossover(const NeuralNetwork& p1, const Neura
 }
 
 std::vector<double> GeneticAgent::mutate(std::vector<double> weights) {
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
     std::uniform_real_distribution<double> uniform_dis(0.0, 1.0);
     std::normal_distribution<double> normal_dis(0.0, 1.0);
 

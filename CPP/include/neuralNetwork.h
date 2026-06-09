@@ -16,6 +16,7 @@ public:
     std::vector<double> getFlat() const;
     void setFlat(const std::vector<double>& flat); 
     const std::vector<int>& getLayerSizes() const { return layerSizes; }
+    void randomize(std::mt19937& gen);
 private:
     std::vector<int> layerSizes;
     std::vector<Matrix> weights;

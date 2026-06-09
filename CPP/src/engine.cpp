@@ -1,6 +1,9 @@
 #include "../include/engine.h"
+#include <cstddef>
+#include <optional>
+#include <random>
 
-Engine::Engine() : width(20), height(20), snake({width / 2, height / 2}) {
+Engine::Engine() : width(20), height(20), snake({width / 2, height / 2}), rng(std::random_device{}()) {
     reset();
 }
 
@@ -89,27 +92,30 @@ bool Engine::isDead() const {
 }
 
 std::optional<Position> Engine::spawnApple() {
-    std::vector<Position> positions = snake.getPositions();
-    std::unordered_set<Position, PositionHash> occupied(positions.begin(), positions.end());
+    const std::vector<Position>& bodyPositions = snake.getPositions();
+    const size_t snakeLen = bodyPositions.size();
+    const size_t totalCells = static_cast<size_t>(width * height);
+
+    if (snakeLen >= totalCells) return std::nullopt;
+
+    std::unordered_set<Position, PositionHash> occupied(
+        bodyPositions.begin(), bodyPositions.end());
+
+    if (snakeLen * 2 < totalCells) {
+        std::uniform_int_distribution<int> dx(0, width - 1);
+        std::uniform_int_distribution<int> dy(0, height - 1);
+        Position p;
+        do { p = {dx(rng), dy(rng)}; } while (occupied.count(p));
+        return p;
+    }
 
     std::vector<Position> freeCells;
-    freeCells.reserve(width * height);
-
-    for (int x = 0; x < width; ++x) {
-        for (int y = 0; y < height; ++y) {
-            if (!occupied.count({x, y})) {
+    freeCells.reserve(totalCells - snakeLen);
+    for (int x = 0; x < width; ++x)
+        for (int y = 0; y < height; ++y)
+            if (!occupied.count({x, y}))
                 freeCells.push_back({x, y});
-            }
-        }
-    }
-
-    if (freeCells.empty()) {
-        return std::nullopt;
-    }
-
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
 
     std::uniform_int_distribution<size_t> dist(0, freeCells.size() - 1);
-    return freeCells[dist(gen)];
+    return freeCells[dist(rng)];
 }
