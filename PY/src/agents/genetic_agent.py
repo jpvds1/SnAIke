@@ -208,7 +208,7 @@ class GeneticGenome(Genome):
 
 _CKPT_DIR     = "./checkpoints"
 _META_FILE    = "GeneticAlgorithm_meta.json"
-_WEIGHTS_FILE = "GeneticAlgorithm_weights"
+_WEIGHTS_FILE = "GeneticAlgorithm_weights.json"
 
 # ---------------------------------------------------------------------------
 # Genetic Agent
@@ -358,7 +358,7 @@ class GeneticAgent(PopulationAgent):
         os.makedirs(_CKPT_DIR, exist_ok=True)
 
         state = {
-            "agent": "GeneticAlgorithm",
+            "agent": "GeneticAgent",
             "version": _SCHEMA_VERSION,
             "generation": self.generation,
             "best_score_ever": self._best_score_ever,
@@ -375,55 +375,85 @@ class GeneticAgent(PopulationAgent):
             },
         }
         
-        file_path = os.path.join(_CKPT_DIR, _META_FILE)
-        with open(file_path, "w") as f:
-            json.dump(state, f, indent=2)
+        meta_path = os.path.join(_CKPT_DIR, _META_FILE)
+        try:
+            with open(meta_path, "w") as f:
+                json.dump(state, f, indent=2)
+        except IOError:
+            print(f"[GeneticAgent] Could not open {meta_path} for writing.")
+            return
 
-        weights_matrix = np.array(
-            [nn.get_flat() for nn in self.population], dtype=np.float64
-        )
-        np.savez_compressed(os.path.join(_CKPT_DIR, _WEIGHTS_FILE), weights=weights_matrix)        
+        weights_path = os.path.join(_CKPT_DIR, _WEIGHTS_FILE)
+        try:
+            with open(weights_path, "wb") as wf:
+                for nn in self.population:
+                    flat_weights = nn.get_flat()
+                    binary_data = np.array(flat_weights, dtype=np.float64).tobytes()
+                    wf.write(binary_data)
+        except IOError:
+            print(f"[GeneticAgent] Could not open {weights_path} for writing.")
+            return
+
+        print(f"[GeneticAgent] Checkpoint saved (gen {self.generation}).")     
 
     def load(self):
         meta_path    = os.path.join(_CKPT_DIR, _META_FILE)
-        weights_path = os.path.join(_CKPT_DIR, _WEIGHTS_FILE + ".npz")
+        weights_path = os.path.join(_CKPT_DIR, _WEIGHTS_FILE)
 
         if not os.path.exists(meta_path):
-            print("[GeneticAlgorithm] No available save file found.")
+            print("[GeneticAgent] No available save file found.")
             return            
 
         with open(meta_path, "r") as f:
             meta = json.load(f)
 
-        if meta.get("agent") != "GeneticAlgorithm":
-            raise ValueError("Agent mismatch in checkpoint metadata.")
-        if meta.get("version") != _SCHEMA_VERSION:
-            raise ValueError(
-                f"Schema version mismatch: expected {_SCHEMA_VERSION}, "
-                f"got {meta.get('version')}."
+        if meta.get("agent") != "GeneticAgent":
+            raise RuntimeError("[GeneticAgent] Agent mismatch in checkpoint metadata.")
+        
+        ver = meta.get("version", -0.1)
+        if ver != _SCHEMA_VERSION:
+            raise RuntimeError(
+                f"[GeneticAgent] Schema version mismatch: expected {_SCHEMA_VERSION} got {ver}"
             )
 
-        self.generation        = meta.get("generation", 1)
-        self._best_score_ever  = meta.get("best_score_ever", 0)
+        self.generation       = meta.get("generation", self.generation)
+        self._best_score_ever = meta.get("best_score_ever", self._best_score_ever)
 
         hp = meta.get("hyperparameters", {})
-        self.pop_size             = hp.get("pop_size",              self.pop_size)
-        self.elite_count          = hp.get("elite_count",           self.elite_count)
-        self.mutation_rate        = hp.get("mutation_rate",         self.mutation_rate)
-        self.mutation_strength    = hp.get("mutation_strength",     self.mutation_strength)
-        self.min_mutation_strength= hp.get("min_mutation_strength", self.min_mutation_strength)
-        self.mut_stren_dropoff    = hp.get("mut_stren_dropoff",     self.mut_stren_dropoff)
-        self.tournament_size      = hp.get("tournament_size",       self.tournament_size)
-        self.layer_sizes          = hp.get("layer_sizes",           self.layer_sizes)
-        self.save_interval        = hp.get("save_interval",         self.save_interval)
+        if hp:
+            self.pop_size              = hp.get("pop_size",              self.pop_size)
+            self.elite_count           = hp.get("elite_count",           self.elite_count)
+            self.mutation_rate         = hp.get("mutation_rate",         self.mutation_rate)
+            self.mutation_strength     = hp.get("mutation_strength",     self.mutation_strength)
+            self.min_mutation_strength = hp.get("min_mutation_strength", self.min_mutation_strength)
+            self.mut_stren_dropoff     = hp.get("mut_stren_dropoff",     self.mut_stren_dropoff)
+            self.tournament_size       = hp.get("tournament_size",       self.tournament_size)
+            self.save_interval         = hp.get("save_interval",         self.save_interval)
+            
+            ls = hp.get("layer_sizes", [])
+            if ls:
+                self.layer_sizes = ls
 
-        while len(self.population) < self.pop_size:
-            self.population.append(NeuralNetwork(self.layer_sizes))
-        self.population = self.population[:self.pop_size]
+        self.population = [NeuralNetwork(self.layer_sizes) for _ in range(self.pop_size)]
 
-        npz = np.load(weights_path)
-        for i, flat in enumerate(npz["weights"]):
-            if i < len(self.population):
-                self.population[i].set_flat(flat)
+        if not os.path.exists(weights_path):
+            print("[GeneticAgent] No weights file found; starting with random weights.")
+            return
 
-        self._play_nn = self.population[0]
+        probe = NeuralNetwork(self.layer_sizes)
+        flat_size = len(probe.get_flat())
+        bytes_per_agent = flat_size * 8
+
+        with open(weights_path, "rb") as wf:
+            for i in range(self.pop_size):
+                data = wf.read(bytes_per_agent)
+                if len(data) != bytes_per_agent:
+                    break
+                
+                flat_array = np.frombuffer(data, dtype=np.float64)
+                self.population[i].set_flat(flat_array)
+
+        if len(self.population) > 0:
+            self._play_nn = self.population[0]
+
+        print(f"[GeneticAgent] Loaded checkpoint: gen {self.generation}, best score {self._best_score_ever}")
