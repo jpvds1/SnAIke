@@ -10,6 +10,7 @@
 #include <optional>
 #include <random>
 #include <unordered_set>
+#include <algorithm>
 
 #include "snake.h"
 #include "helpers.h"

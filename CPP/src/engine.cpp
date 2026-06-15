@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <optional>
 #include <random>
+#include <vector>
 
 Engine::Engine() : width(20), height(20), snake({width / 2, height / 2}), rng(std::random_device{}()) {
     reset();
@@ -26,8 +27,8 @@ GymState Engine::update(std::optional<Direction> dir) {
         };
     }
 
-    Position nHead = nextHead(dir);
-    bool ateApple = (nHead == state.apple);
+    const Position nHead = nextHead(dir);
+    const bool ateApple = (nHead == state.apple);
 
     Direction actualDir = dir.value_or(snake.getDirection());
     if (isOpposite(actualDir, snake.getDirection())) {
@@ -70,20 +71,20 @@ State Engine::getState() const {
 }
 
 Position Engine::nextHead(std::optional<Direction> dir) {
-    Direction snakeDir = snake.getDirection();
+    const Direction snakeDir = snake.getDirection();
     Direction finalDir = dir.value_or(snakeDir);
 
     if (isOpposite(finalDir, snakeDir)) {
         finalDir = snakeDir;
     }
 
-    Position head = snake.getHead();
-    Position offsets = directionOffset(finalDir);
+    const Position head = snake.getHead();
+    const Position offsets = directionOffset(finalDir);
     return {head.x + offsets.x, head.y + offsets.y};
 }
 
 bool Engine::isDead() const {
-    Position head = snake.getHead();
+    const Position head = snake.getHead();
     if (head.x < 0 || head.x >= width ||
         head.y < 0 || head.y >= height)
         return true;
@@ -98,22 +99,27 @@ std::optional<Position> Engine::spawnApple() {
 
     if (snakeLen >= totalCells) return std::nullopt;
 
-    std::unordered_set<Position, PositionHash> occupied(
-        bodyPositions.begin(), bodyPositions.end());
+    std::uniform_int_distribution<int> dx(0, width - 1);
+    std::uniform_int_distribution<int> dy(0, height - 1);
 
     if (snakeLen * 2 < totalCells) {
-        std::uniform_int_distribution<int> dx(0, width - 1);
-        std::uniform_int_distribution<int> dy(0, height - 1);
         Position p;
-        do { p = {dx(rng), dy(rng)}; } while (occupied.count(p));
+        do { 
+            p = {dx(rng), dy(rng)}; 
+        } while (std::find(bodyPositions.begin(), bodyPositions.end(), p) != bodyPositions.end());
         return p;
     }
 
+    std::array<bool, 400> mask = {};
+    for (const auto& p : bodyPositions)
+        mask[static_cast<size_t>(p.y * width + p.x)] = true;
+
     std::vector<Position> freeCells;
     freeCells.reserve(totalCells - snakeLen);
-    for (int x = 0; x < width; ++x)
-        for (int y = 0; y < height; ++y)
-            if (!occupied.count({x, y}))
+
+    for (int y = 0; y < height; ++y)
+        for (int x = 0; x < width; ++x)
+            if (!mask[static_cast<size_t>(y * width + x)])
                 freeCells.push_back({x, y});
 
     std::uniform_int_distribution<size_t> dist(0, freeCells.size() - 1);

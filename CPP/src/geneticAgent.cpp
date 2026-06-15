@@ -92,8 +92,8 @@ static std::vector<int> jsonParseIntArray(const std::string& arr) {
 GeneticGenome::GeneticGenome(NeuralNetwork nn) : nn(nn) {}
 
 std::optional<Direction> GeneticGenome::getAction(State state) {
-    std::vector<double> obs = getObservation(state);
-    std::vector<double> output = nn.forward(obs);
+    const auto obs = getObservation(state);
+    const std::vector<double> output = nn.forward(obs);
 
     int action_idx = 0;
     double max_val = output[0];
@@ -178,7 +178,7 @@ void GeneticAgent::evolve(std::vector<State> results) {
         totalFitness += f;
     }
 
-    bool isNewBest = genBest > bestScoreEver;
+    const bool isNewBest = genBest > bestScoreEver;
     if (isNewBest) bestScoreEver = genBest;
 
     std::cout << "[GeneticAgent] Gen" << generation
@@ -189,6 +189,7 @@ void GeneticAgent::evolve(std::vector<State> results) {
               << std::endl;
 
     std::vector<std::pair<double, size_t>> ranked;
+    ranked.reserve(fitnessScores.size());
     for (size_t i = 0; i < fitnessScores.size(); i++) {
         ranked.push_back({fitnessScores[i], i});
     }
@@ -204,8 +205,8 @@ void GeneticAgent::evolve(std::vector<State> results) {
     }
 
     while (newPopulation.size() < static_cast<size_t>(popSize)) {
-        int p1_idx = tournamentSelect(ranked);
-        int p2_idx = tournamentSelect(ranked);
+        const int p1_idx = tournamentSelect(ranked);
+        const int p2_idx = tournamentSelect(ranked);
 
         std::vector<double> childWeights = mutate(crossover(population[p1_idx], population[p2_idx]));
         NeuralNetwork child(layerSizes);
@@ -241,9 +242,10 @@ void GeneticAgent::updateGenomePopulation() {
 }
 
 double GeneticAgent::computeFitness(const State& result) const {
-    double score = result.score;
-    double steps = result.steps;
-    double fitness = steps + std::pow(score, 4.0) - (std::pow(steps, 1.5) / (score + 1.0));
+    const double score = result.score;
+    const double steps = result.steps;
+    const double avg_steps = steps / (score > 0 ? score : 1.0);
+    const double fitness = (score + 0.1) * (1000.0 - avg_steps);
     return (fitness > 0.1) ? fitness : 0.1;
 }
 
@@ -280,12 +282,12 @@ std::vector<double> GeneticAgent::mutate(std::vector<double> weights) {
     std::uniform_real_distribution<double> uniform_dis(0.0, 1.0);
     std::normal_distribution<double> normal_dis(0.0, 1.0);
 
-    double mutStren = mutationStrength - 0.01 * (generation / mutStrenDropoff);
+    double mutStren = mutationStrength - 0.01 * (static_cast<double>(generation) / mutStrenDropoff);
     if (mutStren < minMutationStrength) mutStren = minMutationStrength;
 
-    for (size_t i = 0; i < weights.size(); i++) {
+    for (auto& w : weights) {
         if (uniform_dis(gen) < mutationRate) {
-            weights[i] += normal_dis(gen) * mutStren;
+            w += normal_dis(gen) * mutStren;
         }
     }
     return weights;
@@ -300,7 +302,9 @@ void GeneticAgent::save(bool force) {
 
     std::filesystem::create_directories(CKPT_DIR);
 
-    std::string metaPath = std::string(CKPT_DIR) + "/" + META_FILE;
+    const std::string metaPath = std::string(CKPT_DIR) + "/" + META_FILE;
+    const std::string weightsPath = std::string(CKPT_DIR) + "/" + WEIGHTS_FILE;
+
     std::ofstream meta(metaPath);
     if (!meta.is_open()) {
         std::cerr << "[GeneticAgent] Could not open " << metaPath << " for writing." << std::endl;
@@ -334,7 +338,6 @@ void GeneticAgent::save(bool force) {
          << "}\n";
     meta.close();
 
-    std::string weightsPath = std::string(CKPT_DIR) + "/" + WEIGHTS_FILE;
     std::ofstream wf(weightsPath, std::ios::binary);
     if (!wf.is_open()) {
         std::cerr << "[GeneticAgent] Could not open " << weightsPath << " for writing.\n";
@@ -342,7 +345,7 @@ void GeneticAgent::save(bool force) {
     }
 
     for (const auto& nn : population) {
-        std::vector<double> flat = nn.getFlat();
+        const std::vector<double> flat = nn.getFlat();
         wf.write(reinterpret_cast<const char*>(flat.data()),
                 static_cast<std::streamsize>(flat.size() * sizeof(double)));
     }

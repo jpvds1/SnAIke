@@ -7,6 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Threads REQUIRED)
 
+include(CheckIPOSupported)
+check_ipo_supported(RESULT _ipo_supported OUTPUT _ipo_error)
+if (_ipo_supported)
+    message(STATUS "[snake] IPO/LTO: enabled")
+else()
+    message(WARNING "[snake] IPO/LTO not supported: $(_ipo_error)")
+endif()
+
 # Define Include Directories (target-specific is preferred over global include_directories)
 # We use BEFORE to make sure your headers take priority
 include_directories(BEFORE include)
@@ -30,8 +38,13 @@ add_executable(snake_environment_test ${SOURCE_FILES})
 
 target_link_libraries(snake_environment_test PRIVATE Threads::Threads)
 
+if (_ipo_supported)
+    set_property(TARGET snake_environment_test
+                 PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+endif()            
+
 # Compiler optimizations
 target_compile_options(snake_environment_test PRIVATE
-    $<$<CONFIG:Release>:-O3 -march=native>
+    $<$<AND:$<CXX_COMPILER_ID:GNU,Clang>,$<CONFIG:Release>>:-O3 -march=native>
     $<$<CXX_COMPILER_ID:MSVC>:/O2>
 )
