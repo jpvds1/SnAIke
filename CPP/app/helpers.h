@@ -3,6 +3,9 @@
 #pragma once
 
 #include <vector>
+#include <string>
+#include <cstddef>
+#include <cassert>
 
 #include "types.h"
 
@@ -17,4 +20,4 @@ std::vector<double> vectorMatrixMultiplication(const std::vector<double>& vec, c
 double computeRay(Position head, Position dir, Position boardSize, const std::array<bool, MAX_BOARD_CELLS>& mask);
 double computeWall(Position head, Position dir, Position boardSize);
 
-std::vector<double> getObservation(const State& state);
+std::vector<double> getObservation(const State& state, const std::vector<std::string>& components);

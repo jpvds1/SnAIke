@@ -1,5 +1,4 @@
 #include "helpers.h"
-#include <cstddef>
 
 bool isOpposite(Direction dir1, Direction dir2) {
     switch (dir1) {
@@ -61,38 +60,79 @@ double computeWall(Position head, Position dir, Position boardSize) {
     return (s > 0) ? (1.0 / s) : 1.0;
 }
 
-std::vector<double> getObservation(const State& state) {
-    std::array<bool, MAX_BOARD_CELLS> mask = {};
+std::vector<double> getObservation(const State& state, const std::vector<std::string>& components) {
     const int bw = state.boardSize.x;
+    const int bh = state.boardSize.y;
 
-    for (size_t i = 1; i < state.snakePositions.size(); ++i) {
-        const auto& p = state.snakePositions[i];
-        mask[p.y * bw + p.x] = true;
+    const Position fwd = directionOffset(state.direction);
+    const Position rgt = fwd.rotateCW();
+    const Position lft = fwd.rotateCCW();
+
+    std::array<bool, MAX_BOARD_CELLS> mask = {};
+    bool maskBuilt = false;
+    auto ensureMask = [&]() {
+        if (maskBuilt) return;
+        for (size_t i = 1; i < state.snakePositions.size(); ++i) {
+            const auto& p = state.snakePositions[i];
+            mask[p.y * bw + p.x] = true;
+        }
+        maskBuilt = true;
+    };
+
+    auto blocked = [&](Position dir) -> double {
+        const int cx = state.head.x + dir.x;
+        const int cy = state.head.y + dir.y;
+        if (cx < 0 || cx >= bw || cy < 0 || cy >= bh) return 1.0;
+        ensureMask();
+        return mask[cy * bw + cx] ? 1.0 : 0.0;
+    };
+
+    std::vector<double> out;
+    for (const auto& c : components) {
+        if (c == "relative_apple") {
+            Position rel = state.apple - state.head;
+            double afwd  = rel.x * fwd.x + rel.y * fwd.y;
+            double aside = rel.x * rgt.x + rel.y * rgt.y;
+            out.push_back((afwd  != 0.0) ? (1.0 / afwd)  : 0.0);
+            out.push_back((aside != 0.0) ? (1.0 / aside) : 0.0);
+        } else if (c == "absolute_apple") {
+            out.push_back(static_cast<double>(state.apple.x) / (bw - 1));
+            out.push_back(static_cast<double>(state.apple.y) / (bh - 1));
+        } else if (c == "head_position") {
+            out.push_back(static_cast<double>(state.head.x) / (bw - 1));
+            out.push_back(static_cast<double>(state.head.y) / (bh - 1));
+        } else if (c == "direction") {
+            out.push_back(static_cast<double>(fwd.x));
+            out.push_back(static_cast<double>(fwd.y));
+        } else if (c == "snake_size") {
+            out.push_back(static_cast<double>(state.snakePositions.size()) / (bw * bh));
+        } else if (c == "distance_to_walls") {
+            out.push_back(computeWall(state.head, fwd,      state.boardSize));
+            out.push_back(computeWall(state.head, fwd * -1, state.boardSize));
+            out.push_back(computeWall(state.head, rgt,      state.boardSize));
+            out.push_back(computeWall(state.head, lft,      state.boardSize));
+        } else if (c == "distance_to_danger") {
+            ensureMask();
+            out.push_back(computeRay(state.head, fwd, state.boardSize, mask));
+            out.push_back(computeRay(state.head, rgt, state.boardSize, mask));
+            out.push_back(computeRay(state.head, lft, state.boardSize, mask));
+        } else if (c == "danger_flags") {
+            out.push_back(blocked(fwd));
+            out.push_back(blocked(rgt));
+            out.push_back(blocked(lft));
+        } else if (c == "full_grid") {
+            // 0 empty, -1 body, 1 apple, 0.5 head
+            std::vector<double> grid(bw * bh, 0.0);
+            for (size_t i = 1; i < state.snakePositions.size(); ++i) {
+                const auto& p = state.snakePositions[i];
+                grid[p.y * bw + p.x] = -1.0;
+            }
+            grid[state.apple.y * bw + state.apple.x] = 1.0;
+            grid[state.head.y * bw + state.head.x]   = 0.5;
+            out.insert(out.end(), grid.begin(), grid.end());
+        } else {
+            assert(false && "unknown observation component");
+        }
     }
-
-    double snake_size = static_cast<double>(state.snakePositions.size()) / (state.boardSize.x * state.boardSize.y);
-
-    Position fwdVec = directionOffset(state.direction);
-    Position rgtVec = fwdVec.rotateCW();
-    Position lftVec = fwdVec.rotateCCW();
-
-    double ba = computeRay(state.head, fwdVec, state.boardSize, mask);
-    double br = computeRay(state.head, rgtVec, state.boardSize, mask);
-    double bl = computeRay(state.head, lftVec, state.boardSize, mask);
-
-    double wa = computeWall(state.head, fwdVec, state.boardSize);
-    double wb = computeWall(state.head, fwdVec * -1, state.boardSize);
-    double wr = computeWall(state.head, rgtVec, state.boardSize);
-    double wl = computeWall(state.head, lftVec, state.boardSize);
-
-    Position relApple = state.apple - state.head;
-    double afwd = relApple.x * fwdVec.x + relApple.y * fwdVec.y;
-    double aside = relApple.x * rgtVec.x + relApple.y * rgtVec.y;
-    double av = (afwd != 0.0) ? (1.0 / afwd) : 0.0;
-    double asv = (aside != 0.0) ? (1.0 / aside) : 0.0;
-
-    return {ba, br, bl, wa, wb, wr, wl, 
-        static_cast<double>(fwdVec.x), 
-        static_cast<double>(fwdVec.y), 
-        av, asv, snake_size};
+    return out;
 }
