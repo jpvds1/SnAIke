@@ -120,6 +120,7 @@ void GeneticAgent::evolve(std::vector<State> results) {
     double totalScore   = 0.0;
     double maxFitness   = -0.1;
     double totalFitness = 0.0;
+    long   totalSteps   = 0;
     int genBest         = -1;
 
     for (const auto& r : results) {
@@ -129,7 +130,10 @@ void GeneticAgent::evolve(std::vector<State> results) {
         if (f > maxFitness) maxFitness = f;
         totalScore += r.score;
         totalFitness += f;
+        totalSteps += r.steps;
     }
+
+    lastAvgFitness = totalFitness / results.size();
 
     const bool isNewBest = genBest > bestScoreEver;
     if (isNewBest) bestScoreEver = genBest;
@@ -137,6 +141,7 @@ void GeneticAgent::evolve(std::vector<State> results) {
     std::cout << "[GeneticAgent] Gen" << generation
               << " | Best Score: " << genBest
               << " | Avg Score: " << (totalScore / results.size())
+              << " | Avg Steps: " << (totalSteps / results.size())
               << " | Best Fitness: " << maxFitness
               << " | Avg Fitness: " << (totalFitness / results.size())
               << std::endl;
