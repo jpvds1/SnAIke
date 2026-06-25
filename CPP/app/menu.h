@@ -7,7 +7,11 @@
 #include <iostream>
 #include <limits>
 #include <string>
+#include <optional>
+#include <string>
+#include <vector>
 
+#include "configRegistry.h"
 #include "agent.h"
 #include "registry.h"
 #include "trainer.h"

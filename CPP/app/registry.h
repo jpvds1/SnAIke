@@ -20,6 +20,8 @@ struct AgentEntry {
 
     std::vector<std::pair<std::string, std::string>> paramDefs;
 
+    std::vector<std::pair<std::string, bool>> inputParamDefs;
+
     std::function<std::unique_ptr<Agent>(const ParamMap&)> factory;
 };
 
@@ -54,19 +56,22 @@ inline std::vector<AgentEntry> makeRegistry() {
                 {"min_mutation_strength", "0.05"},
                 {"mut_stren_dropoff",     "40"},
                 {"tournament_size",       "5"},
-                {"save_interval",         "20"}
+                {"save_interval",         "20"},
+                {"hidden_layers",         "[16]"}
+            },
+            .inputParamDefs = {
+                {"relative_apple",     true},
+                {"absolute_apple",     false},
+                {"head_position",      false},
+                {"direction",          true},
+                {"snake_size",         true},
+                {"distance_to_walls",  true},
+                {"distance_to_danger", true},
+                {"danger_flags",       false},
+                {"full_grid",          false}
             },
             .factory = [](const ParamMap& p) -> std::unique_ptr<Agent> {
-                return std::make_unique<GeneticAgent>(
-                    paramInt   (p, "pop_size",              200),
-                    paramInt   (p, "elite_count",           5),
-                    paramDouble(p, "mutation_rate",         0.10),
-                    paramDouble(p, "mutation_strength",     0.20),
-                    paramDouble(p, "min_mutation_strength", 0.05),
-                    paramInt   (p, "mut_stren_dropoff",     40),
-                    paramInt   (p, "tournament_size",       5),
-                    paramInt   (p, "save_interval",         20)
-                );
+                return std::make_unique<GeneticAgent>("genetic", p);
             }
         }
     };

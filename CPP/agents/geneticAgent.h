@@ -20,32 +20,29 @@
 #include <string>
 
 
+#include <map>
+
+#include "helpers.h"
+#include "json.h"
 #include "agent.h"
 #include "neuralNetwork.h"
 #include "types.h"
+#include "configRegistry.h"
 
 class GeneticGenome : public Genome {
 public:
-    GeneticGenome(NeuralNetwork nn);
+    GeneticGenome(NeuralNetwork nn, std::vector<std::string> components);
     std::optional<Direction> getAction(State state) override;
     const NeuralNetwork& getNN() const { return nn; }
 
 private:
     NeuralNetwork nn;
+    std::vector<std::string> components;
 };
 
 class GeneticAgent : public PopulationAgent {
 public:
-    GeneticAgent(
-        int popSize = 200,
-        int eliteCount = 5,
-        double mutationRate = 0.10,
-        double mutationStrength = 0.2,
-        double minMutationStrength = 0.05,
-        int mutStrenDropoff = 40,
-        int tournamentSize = 5,
-        int saveInterval = 20
-    );
+    GeneticAgent(std::string agentName, std::map<std::string, std::string> params);
 
     std::vector<std::unique_ptr<Genome>>& getPopulation() override;
     void evolve(std::vector<State> results) override;
@@ -61,6 +58,7 @@ private:
     int tournamentSize;
     int saveInterval;
 
+    std::vector<std::string> components;
     std::vector<int> layerSizes;
     int generation;
     int bestScoreEver;
@@ -69,6 +67,12 @@ private:
     std::vector<std::unique_ptr<Genome>> genomePopulation;
 
     std::mt19937 gen;
+
+    // Persistence identity
+    std::string agentName;
+    std::map<std::string, std::string> params;
+    ConfigRegistry registry;
+    int configId;
 
     // Evolution
     double computeFitness(const State& results) const;

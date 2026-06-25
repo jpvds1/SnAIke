@@ -1,98 +1,45 @@
 #include "geneticAgent.h"
 #include <random>
 
-static constexpr const char* CKPT_DIR      = "./checkpoints";
-static constexpr const char* META_FILE     = "GeneticAlgorithm_meta.json";
-static constexpr const char* WEIGHTS_FILE  = "GeneticAlgorithm_weights.json";
-static constexpr double      SCHEMA_VERSION = 3.0;
-
 // ---------------------------------------------------------------------------------
-// JSON Helpers
+// Parameter helpers
 // ---------------------------------------------------------------------------------
 
-static std::string jsonGetRaw(const std::string& json, const std::string& key) {
-    std::string needle = "\"" + key + "\"";
-    auto pos = json.find(needle);
-    if (pos == std::string::npos) return "";
-    pos = json.find(':', pos + needle.size());
-    if (pos == std::string::npos) return "";
-    pos++;
-    while (pos < json.size() && std::isspace((unsigned char)json[pos])) pos++;
-    if (pos >= json.size()) return "";
-
-    char open = json[pos];
-    if (open == '[' || open == '{') {
-        char close = (open == '[') ? ']' : '}';
-        int depth = 1;
-        size_t start = pos;
-        pos++;
-        while (pos < json.size() && depth > 0) {
-            if (json[pos] == open) depth++;
-            if (json[pos] == close) depth--;
-            pos++;
-        }
-        return json.substr(start, pos - start);
-    } else {
-        size_t start = pos;
-        while (pos < json.size() && json[pos] != ',' && json[pos] != '}' && json[pos] != '\n') pos++;
-        std::string raw = json.substr(start, pos - start);
-
-        while (!raw.empty() && std::isspace((unsigned char)raw.front())) raw.erase(raw.begin());
-        while (!raw.empty() && std::isspace((unsigned char)raw.back())) raw.pop_back();
-        if (raw.size() >= 2 && raw.front() == '"' && raw.back() == '"') {
-            raw = raw.substr(1, raw.size() - 2);
-        }
-        return raw;
-    }
+static std::map<std::string, std::string> defaultParams() {
+    return {
+        {"pop_size",              "200"},
+        {"elite_count",           "5"},
+        {"mutation_rate",         "0.10"},
+        {"mutation_strength",     "0.20"},
+        {"min_mutation_strength", "0.05"},
+        {"mut_stren_dropoff",     "40"},
+        {"tournament_size",       "5"},
+        {"save_interval",         "20"},
+        {"hidden_layers",         "[16]"},
+        {"input_components",      "relative_apple,direction,snake_size,distance_to_walls,distance_to_danger"}
+    };
 }
 
-static double jsonGetDouble(const std::string& json, const std::string& key, double def = 0.0) {
-    auto s = jsonGetRaw(json, key);
-    if (s.empty()) return def;
-    try {
-        return std::stod(s);
-    } catch (...) {
-        return def;
-    }
-}
-
-static int jsonGetInt(const std::string& json, const std::string& key, int def = 0) {
-    auto s = jsonGetRaw(json, key);
-    if (s.empty()) return def;
-    try {
-        return std::stoi(s);
-    } catch (...) {
-        return def;
-    }
-}
-
-static std::string jsonGetStr(const std::string& json, const std::string& key, const std::string& def = "") {
-    auto s = jsonGetRaw(json, key);
-    return s.empty() ? def : s;
-}
-
-static std::vector<int> jsonParseIntArray(const std::string& arr) {
-    std::vector<int> out;
-    bool inside = false;
+static std::vector<std::string> splitComponents(const std::string& csv) {
+    std::vector<std::string> out;
     std::string cur;
-    for (char c : arr) {
-        if (c == '[') { inside = true; continue; }
-        if (c == ']') { if (!cur.empty()) { try { out.push_back(std::stoi(cur)); } catch (...) {} cur.clear(); } break; }
-        if (inside && (std::isdigit((unsigned char)c) || c == '-')) cur += c;
-        else if (inside && c == ',') { if (!cur.empty()) { try { out.push_back(std::stoi(cur)); } catch (...) {} cur.clear(); } }
+    for (char c : csv) {
+        if (c == ',') { if (!cur.empty()) out.push_back(cur); cur.clear(); }
+        else if (!std::isspace((unsigned char)c)) cur += c;
     }
+    if (!cur.empty()) out.push_back(cur);
     return out;
 }
-
 
 // ---------------------------------------------------------------------------------
 // Genetic Genome
 // ---------------------------------------------------------------------------------
 
-GeneticGenome::GeneticGenome(NeuralNetwork nn) : nn(nn) {}
+GeneticGenome::GeneticGenome(NeuralNetwork nn, std::vector<std::string> components)
+    : nn(nn), components(std::move(components)) {}
 
 std::optional<Direction> GeneticGenome::getAction(State state) {
-    const auto obs = getObservation(state);
+    const auto obs = getObservation(state, components);
     const std::vector<double> output = nn.forward(obs);
 
     int action_idx = 0;
@@ -117,28 +64,34 @@ std::optional<Direction> GeneticGenome::getAction(State state) {
 // Gemetic Agent
 // ---------------------------------------------------------------------------------
 
-GeneticAgent::GeneticAgent(
-    int popSize,
-    int eliteCount,
-    double mutationRate,
-    double mutationStrength,
-    double minMutationStrength,
-    int mutStrenDropoff,
-    int tournamentSize,
-    int saveInterval
-) : 
-popSize(popSize),
-eliteCount(eliteCount),
-mutationRate(mutationRate),
-mutationStrength(mutationStrength),
-minMutationStrength(minMutationStrength),
-mutStrenDropoff(mutStrenDropoff),
-tournamentSize(tournamentSize),
-saveInterval(saveInterval),
-generation(0),
-bestScoreEver(0),
-layerSizes({12, 16, 3}),
-gen(std::random_device{}()) {
+GeneticAgent::GeneticAgent(std::string agentName, std::map<std::string, std::string> paramsIn)
+    : generation(0),
+      bestScoreEver(0),
+      gen(std::random_device{}()),
+      agentName(std::move(agentName)),
+      params(defaultParams()),
+      registry(this->agentName),
+      configId(-1) {
+    for (auto& [k, v] : paramsIn) params[k] = v;
+
+    popSize             = std::stoi(params.at("pop_size"));
+    eliteCount          = std::stoi(params.at("elite_count"));
+    mutationRate        = std::stod(params.at("mutation_rate"));
+    mutationStrength    = std::stod(params.at("mutation_strength"));
+    minMutationStrength = std::stod(params.at("min_mutation_strength"));
+    mutStrenDropoff     = std::stoi(params.at("mut_stren_dropoff"));
+    tournamentSize      = std::stoi(params.at("tournament_size"));
+    saveInterval        = std::stoi(params.at("save_interval"));
+
+    components = splitComponents(params.at("input_components"));
+
+    std::vector<int> hidden = jsonParseIntArray(params.at("hidden_layers"));
+    if (hidden.empty()) hidden = {16};
+    layerSizes.clear();
+    layerSizes.push_back(observationSize(components));
+    for (int h : hidden) layerSizes.push_back(h);
+    layerSizes.push_back(3);
+
     load();
     if (population.empty()) {
         population.reserve(popSize);
@@ -148,7 +101,7 @@ gen(std::random_device{}()) {
             population.push_back(nn);
         }
     }
-    
+
     updateGenomePopulation();
 }
 
@@ -226,7 +179,7 @@ void GeneticAgent::evolve(std::vector<State> results) {
 // ---------------------------------------------------------------------------------
 
 std::optional<Direction> GeneticAgent::getAction(State state) {
-    return GeneticGenome(population[0]).getAction(state);
+    return GeneticGenome(population[0], components).getAction(state);
 }
 
 // ---------------------------------------------------------------------------------
@@ -237,7 +190,7 @@ void GeneticAgent::updateGenomePopulation() {
     genomePopulation.clear();
     genomePopulation.reserve(population.size());
     for (const auto& nn : population) {
-        genomePopulation.push_back(std::make_unique<GeneticGenome>(nn));
+        genomePopulation.push_back(std::make_unique<GeneticGenome>(nn, components));
     }
 }
 
@@ -300,50 +253,16 @@ std::vector<double> GeneticAgent::mutate(std::vector<double> weights) {
 void GeneticAgent::save(bool force) {
     if (!force && (generation % saveInterval != 0)) return;
 
-    std::filesystem::create_directories(CKPT_DIR);
+    if (configId == -1) configId = registry.createNew(params).id;
 
-    const std::string metaPath = std::string(CKPT_DIR) + "/" + META_FILE;
-    const std::string weightsPath = std::string(CKPT_DIR) + "/" + WEIGHTS_FILE;
-
-    std::ofstream meta(metaPath);
-    if (!meta.is_open()) {
-        std::cerr << "[GeneticAgent] Could not open " << metaPath << " for writing." << std::endl;
-        return;
-    }
-
-    std::ostringstream lsArr;
-    lsArr << "[";
-    for (size_t i = 0; i < layerSizes.size(); i++) {
-        if (i) lsArr << ", ";
-        lsArr << layerSizes[i];
-    }
-    lsArr << "]";
-
-    meta << "{\n"
-         << "  \"agent\": \"GeneticAgent\",\n"
-         << "  \"version\": " << SCHEMA_VERSION << ",\n"
-         << "  \"generation\": " << generation << ",\n"
-         << "  \"best_score_ever\": " << bestScoreEver << ",\n"
-         << "  \"hyperparameters\": {\n"
-         << "    \"pop_size\": "               << popSize             << ",\n"
-         << "    \"elite_count\": "            << eliteCount          << ",\n"
-         << "    \"mutation_rate\": "          << mutationRate        << ",\n"
-         << "    \"mutation_strength\": "      << mutationStrength    << ",\n"
-         << "    \"min_mutation_strength\": "  << minMutationStrength << ",\n"
-         << "    \"mut_stren_dropoff\": "      << mutStrenDropoff     << ",\n"
-         << "    \"tournament_size\": "        << tournamentSize      << ",\n"
-         << "    \"layer_sizes\": "            << lsArr.str()         << ",\n"
-         << "    \"save_interval\": "          << saveInterval        << "\n"
-         << "  }\n"
-         << "}\n";
-    meta.close();
+    std::filesystem::create_directories("../checkpoints");
+    const std::string weightsPath = registry.weightsPath(configId);
 
     std::ofstream wf(weightsPath, std::ios::binary);
     if (!wf.is_open()) {
         std::cerr << "[GeneticAgent] Could not open " << weightsPath << " for writing.\n";
         return;
     }
-
     for (const auto& nn : population) {
         const std::vector<double> flat = nn.getFlat();
         wf.write(reinterpret_cast<const char*>(flat.data()),
@@ -351,78 +270,47 @@ void GeneticAgent::save(bool force) {
     }
     wf.close();
 
-    std::cout << "[GeneticAgent] Checkpoint saved (gen " << generation << ").\n";
+    registry.update(configId, generation, bestScoreEver);
+
+    std::cout << "[GeneticAgent] Checkpoint saved (config #" << configId
+              << ", gen " << generation << ").\n";
 }
 
 void GeneticAgent::load() {
-    std::string metaPath = std::string(CKPT_DIR) + "/" + META_FILE;
-    std::string weightsPath = std::string(CKPT_DIR) + "/" + WEIGHTS_FILE;
-
-    std::ifstream meta(metaPath);
-    if (!meta.is_open()) {
-        std::cout << "[GeneticAlgorithm] No available save file found.\n";
+    auto rec = registry.findByParams(params);
+    if (!rec) {
+        std::cout << "[GeneticAgent] New configuration; starting fresh.\n";
         return;
     }
 
-    std::string json((std::istreambuf_iterator<char>(meta)),
-                      std::istreambuf_iterator<char>());
-    meta.close();
+    configId = rec->id;
+    generation = rec->generation;
+    bestScoreEver = rec->bestScore;
 
-    if (jsonGetStr(json, "agent") != "GeneticAgent")
-        throw std::runtime_error("[GeneticAgent] Agent mismatch in checkpoint metadata.");
-
-    double ver = jsonGetDouble(json, "version", -0.1);
-    if (ver != SCHEMA_VERSION) {
-        std::ostringstream err;
-        err << "[GeneticAgent] Schema version mismatch: expected "
-            << SCHEMA_VERSION << " got " << ver;
-        throw std::runtime_error(err.str());
-    }
-
-    generation = jsonGetInt(json, "generation", generation);
-    bestScoreEver = jsonGetInt(json, "best_score_ever", bestScoreEver);
-
-    std::string hpRaw = jsonGetRaw(json, "hyperparameters");
-    if (!hpRaw.empty()) {
-        popSize             = jsonGetInt(hpRaw, "pop_size", popSize);
-        eliteCount          = jsonGetInt(hpRaw, "elite_count", eliteCount);
-        mutationRate        = jsonGetDouble(hpRaw, "mutation_rate", mutationRate);
-        mutationStrength    = jsonGetDouble(hpRaw, "mutation_strength", mutationStrength);
-        minMutationStrength = jsonGetDouble(hpRaw, "min_mutation_strength", minMutationStrength);
-        mutStrenDropoff     = jsonGetInt(hpRaw, "mut_stren_dropoff", mutStrenDropoff);
-        tournamentSize      = jsonGetInt(hpRaw, "tournament_size", tournamentSize);
-        saveInterval        = jsonGetInt(hpRaw, "save_interval", saveInterval);
-
-        std::string lsRaw = jsonGetRaw(hpRaw, "layer_sizes");
-        auto ls = jsonParseIntArray(lsRaw);
-        if (!ls.empty())
-            const_cast<std::vector<int>&>(layerSizes) = ls;
-    }
-
-    population.clear();
-    population.reserve(popSize);
-    for (int i = 0; i < popSize; i++) {
-        population.push_back(NeuralNetwork(layerSizes));
-    }
-
-    std::ifstream wf(weightsPath, std::ios::binary);
+    std::ifstream wf(registry.weightsPath(configId), std::ios::binary);
     if (!wf.is_open()) {
-        std::cout << "[GeneticAgent] No weights file found; starting with random weights.\n";
+        std::cout << "[GeneticAgent] Config #" << configId
+                  << " has no weights file; starting with random weights.\n";
         return;
     }
 
-    NeuralNetwork probe(layerSizes);
-    size_t flatSize = probe.getFlat().size();
-
+    const size_t flatSize = NeuralNetwork(layerSizes).getFlat().size();
+    std::vector<NeuralNetwork> loaded;
+    loaded.reserve(popSize);
     std::vector<double> flat(flatSize);
     for (int i = 0; i < popSize; i++) {
         wf.read(reinterpret_cast<char*>(flat.data()),
                 static_cast<std::streamsize>(flatSize * sizeof(double)));
         if (wf.gcount() != static_cast<std::streamsize>(flatSize * sizeof(double))) break;
-        population[i].setFlat(flat);
+        NeuralNetwork nn(layerSizes);
+        nn.setFlat(flat);
+        loaded.push_back(std::move(nn));
     }
     wf.close();
 
-    std::cout << "[GeneticAgent] Loaded checkpoint: gen " << generation
+    if (loaded.empty()) return;
+    population = std::move(loaded);
+
+    std::cout << "[GeneticAgent] Loaded config #" << configId << ": gen " << generation
               << ", best score " << bestScoreEver << std::endl;
 }

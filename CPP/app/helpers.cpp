@@ -60,6 +60,23 @@ double computeWall(Position head, Position dir, Position boardSize) {
     return (s > 0) ? (1.0 / s) : 1.0;
 }
 
+int observationSize(const std::vector<std::string>& components) {
+    int total = 0;
+    for (const auto& c : components) {
+        if      (c == "relative_apple")     total += 2;
+        else if (c == "absolute_apple")     total += 2;
+        else if (c == "head_position")      total += 2;
+        else if (c == "direction")          total += 2;
+        else if (c == "snake_size")         total += 1;
+        else if (c == "distance_to_walls")  total += 4;
+        else if (c == "distance_to_danger") total += 3;
+        else if (c == "danger_flags")       total += 3;
+        else if (c == "full_grid")          total += MAX_BOARD_CELLS;
+        else assert(false && "unknown observation component");
+    }
+    return total;
+}
+
 std::vector<double> getObservation(const State& state, const std::vector<std::string>& components) {
     const int bw = state.boardSize.x;
     const int bh = state.boardSize.y;

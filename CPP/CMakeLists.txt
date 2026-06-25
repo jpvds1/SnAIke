@@ -26,6 +26,7 @@ set(SOURCE_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/training/trainer.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/app/helpers.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/app/menu.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/app/configRegistry.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
 )
 
