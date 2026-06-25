@@ -15,21 +15,17 @@ else()
     message(WARNING "[snake] IPO/LTO not supported: $(_ipo_error)")
 endif()
 
-# Define Include Directories (target-specific is preferred over global include_directories)
-# We use BEFORE to make sure your headers take priority
-include_directories(BEFORE include)
+include_directories(BEFORE core agents training app)
 
-# Gather all source files (explicitly relative to this CMakeLists file)
 set(SOURCE_FILES
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/helpers.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/snake.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/engine.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/env.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/session.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/neuralNetwork.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/geneticAgent.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/menu.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/trainer.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/core/snake.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/core/engine.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/core/env.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/agents/neuralNetwork.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/agents/geneticAgent.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/training/trainer.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/app/helpers.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/app/menu.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
 )
 

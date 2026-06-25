@@ -3,10 +3,10 @@
 #include <string>
 #include <vector>
 
-#include "./include/registry.h"
-#include "./include/menu.h"
-#include "include/agent.h"
-#include "include/trainer.h"
+#include "registry.h"
+#include "menu.h"
+#include "agent.h"
+#include "trainer.h"
 
 // ---------------------------------------------------------------------------
 // Helpers

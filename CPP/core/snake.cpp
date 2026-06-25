@@ -1,4 +1,4 @@
-#include "../include/snake.h"
+#include "snake.h"
 
 Snake::Snake(Position pos) {
     body.push_back({

@@ -1,4 +1,4 @@
-#include "../include/env.h"
+#include "env.h"
 
 State SnakeEnv::reset() {
     lastState = engine.reset();

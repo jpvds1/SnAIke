@@ -1,4 +1,4 @@
-#include "../include/geneticAgent.h"
+#include "geneticAgent.h"
 #include <random>
 
 static constexpr const char* CKPT_DIR      = "./checkpoints";

@@ -1,4 +1,4 @@
-#include "../include/helpers.h"
+#include "helpers.h"
 #include <cstddef>
 
 bool isOpposite(Direction dir1, Direction dir2) {

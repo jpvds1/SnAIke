@@ -1,4 +1,4 @@
-#include "../include/trainer.h"
+#include "trainer.h"
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
