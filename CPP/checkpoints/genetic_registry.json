@@ -3,10 +3,17 @@
   "configs": [
     {
       "id": 1,
-      "timestamp": "2026-06-26 00:39:05",
-      "generation": 1000,
-      "best_score": 135,
+      "timestamp": "2026-06-26 01:11:15",
+      "generation": 20000,
+      "best_score": 295,
       "params": {"elite_count": "5", "hidden_layers": "[16]", "input_components": "relative_apple,direction,snake_size,distance_to_walls,distance_to_danger", "min_mutation_strength": "0.05", "mut_stren_dropoff": "40", "mutation_rate": "0.10", "mutation_strength": "0.20", "pop_size": "200", "save_interval": "20", "tournament_size": "5"}
+    },
+    {
+      "id": 2,
+      "timestamp": "2026-06-26 02:09:29",
+      "generation": 7500,
+      "best_score": 4,
+      "params": {"elite_count": "18", "hidden_layers": "[20]", "input_components": "full_grid", "min_mutation_strength": "0.03", "mut_stren_dropoff": "1000", "mutation_rate": "0.02", "mutation_strength": "0.25", "pop_size": "700", "save_interval": "100", "tournament_size": "9"}
     }
   ]
 }

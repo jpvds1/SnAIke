@@ -133,17 +133,25 @@ void GeneticAgent::evolve(std::vector<State> results) {
         totalSteps += r.steps;
     }
 
-    lastAvgFitness = totalFitness / results.size();
+    const double avgScore   = totalScore / results.size();
+    const double avgSteps   = static_cast<double>(totalSteps) / results.size();
+    const double avgFitness = totalFitness / results.size();
+
+    if (avgScore > bestAvgScore) {
+        bestAvgScore        = avgScore;
+        bestAvgScoreSteps   = avgSteps;
+        bestAvgScoreFitness = avgFitness;
+    }
 
     const bool isNewBest = genBest > bestScoreEver;
     if (isNewBest) bestScoreEver = genBest;
 
     std::cout << "[GeneticAgent] Gen" << generation
               << " | Best Score: " << genBest
-              << " | Avg Score: " << (totalScore / results.size())
-              << " | Avg Steps: " << (totalSteps / results.size())
+              << " | Avg Score: " << avgScore
+              << " | Avg Steps: " << avgSteps
               << " | Best Fitness: " << maxFitness
-              << " | Avg Fitness: " << (totalFitness / results.size())
+              << " | Avg Fitness: " << avgFitness
               << std::endl;
 
     std::vector<std::pair<double, size_t>> ranked;
@@ -187,6 +195,15 @@ std::optional<Direction> GeneticAgent::getAction(State state) {
     return GeneticGenome(population[0], components).getAction(state);
 }
 
+void GeneticAgent::atTrainingEnd() {
+    std::cout << "[GeneticAgent]\n"
+              << "  final generation: " << generation << "\n"
+              << "  max score: " << bestScoreEver << "\n"
+              << "  max average score: " << bestAvgScore << "\n"
+              << "  average steps: " << bestAvgScoreSteps << "\n"
+              << "  average fitness: " << bestAvgScoreFitness << "\n";
+}
+
 // ---------------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------------
@@ -203,7 +220,7 @@ double GeneticAgent::computeFitness(const State& result) const {
     const double score = result.score;
     const double steps = result.steps;
     const double avg_steps = steps / (score > 0 ? score : 1.0);
-    const double fitness = (score + 0.1) * (1000.0 - avg_steps);
+    const double fitness = score > 0 ? (score + 0.1) * (1000.0 - avg_steps) : avg_steps;
     return (fitness > 0.1) ? fitness : 0.1;
 }
 

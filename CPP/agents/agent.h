@@ -21,6 +21,8 @@ public:
 
     virtual std::optional<Direction> getAction(State state) = 0;
     virtual void train(std::vector<State> results) = 0;
+
+    virtual void atTrainingEnd() {}
 };
 
 

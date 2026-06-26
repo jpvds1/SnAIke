@@ -86,10 +86,13 @@ std::vector<GenerationStats> Trainer::run() {
     }
 
     const double totalElapsed = std::chrono::duration<double>(Clock::now() - runStart).count();
-    std::cout << "[Trainer] Training complete. "
-              << generation << " generation(s) run."
-              << "  total=" << std::fixed << std::setprecision(1) << totalElapsed << "s"
-              << "  avg=" << (generation > 0 ? totalElapsed / generation : 0.0) << "s/gen\n";
+    std::cout << "[Trainer] Training complete.\n"
+              << "  generations trained: " << generation << "\n"
+              << "  elapsed time: " << std::fixed << std::setprecision(1) << totalElapsed << "s\n"
+              << "  elapsed time / generation: " << std::setprecision(4)
+              << (generation > 0 ? totalElapsed / generation : 0.0) << "s\n";
+
+    agent.atTrainingEnd();
 
     return history_;
 }
