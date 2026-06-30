@@ -23,3 +23,5 @@ double computeWall(Position head, Position dir, Position boardSize);
 std::vector<double> getObservation(const State& state, const std::vector<std::string>& components);
 
 int observationSize(const std::vector<std::string>& components);
+
+const std::vector<std::string>& availableInputComponents();

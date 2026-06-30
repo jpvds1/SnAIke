@@ -4,6 +4,8 @@
 
 #### Configuration
 
+Hyperparameters:
+
 **population size:** 200 <br>
 **tournament size:** 5 <br>
 **elite count:** 5 <br>
@@ -12,6 +14,8 @@
 **mutation strength:** 0.20 <br>
 **min mutation strength:** 0.05 <br>
 **mutation strength dropoff:** 40
+
+Input Parameters:
 
 **relative apple** <br>
 **direction** <br>
@@ -32,9 +36,12 @@
 | 10000      | 262       | 175.85        | 10674.15      | 165268.44       | 259.3s       | 0.1037s                  |
 | 15000      | 286       | 215.29        | 13756.69      | 201662.00       | 804.1s       | 0.1608s                  |
 | 20000      | 295       | 224.71        | 14638.88      | 210164.83       | 890.0s       | 0.1780s                  |
+| 25000      | 304       | 236.83        | 16389.24      | 220535.74       | 985.9s       | 0.1972s                  |
 
 
 ### Full Grid, hidden layers = [20]
+
+Hyperparameters:
 
 **population size:** 700 <br>
 **tournament size:** 9 <br>
@@ -44,6 +51,8 @@
 **mutation strength:** 0.25 <br>
 **min mutation strength:** 0.03 <br>
 **mutation strength dropoff:** 1000
+
+Input Parameters:
 
 **full board**
 
@@ -55,4 +64,6 @@
 | 4000       | 4         | 0.19          | 265.27        | 356.88          | 166.6s       | 0.1666s                  |
 | 5000       | 4         | 0.20          | 239.91        | 342.06          | 166.2s       | 0.1662s                  |
 | 7500       | 4         | 0.21          | 258.15        | 354.13          | 415.2s       | 0.1661s                  |
-| 10000      |          |           |         |           | s       | s                  |
+| 10000      | 4         | 0.24          | 228.67        | 344.58          | 415.4s       | 0.1662s                  |
+
+### Full Grid, hidden layers = [20]

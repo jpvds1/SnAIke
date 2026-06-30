@@ -60,6 +60,15 @@ double computeWall(Position head, Position dir, Position boardSize) {
     return (s > 0) ? (1.0 / s) : 1.0;
 }
 
+const std::vector<std::string>& availableInputComponents() {
+    static const std::vector<std::string> all = {
+        "relative_apple", "absolute_apple", "head_position", "direction",
+        "snake_size", "distance_to_walls", "distance_to_danger",
+        "danger_flags", "full_grid"
+    };
+    return all;
+}
+
 int observationSize(const std::vector<std::string>& components) {
     int total = 0;
     for (const auto& c : components) {
