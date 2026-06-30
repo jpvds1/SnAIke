@@ -143,16 +143,23 @@ void GeneticAgent::evolve(std::vector<State> results) {
         bestAvgScoreFitness = avgFitness;
     }
 
+    if (genBest > intervalMaxScore) intervalMaxScore = genBest;
+    intervalScoreSum   += avgScore;
+    intervalStepsSum   += avgSteps;
+    intervalFitnessSum += avgFitness;
+    intervalCount++;
+
     const bool isNewBest = genBest > bestScoreEver;
     if (isNewBest) bestScoreEver = genBest;
 
-    std::cout << "[GeneticAgent] Gen" << generation
-              << " | Best Score: " << genBest
-              << " | Avg Score: " << avgScore
-              << " | Avg Steps: " << avgSteps
-              << " | Best Fitness: " << maxFitness
-              << " | Avg Fitness: " << avgFitness
-              << std::endl;
+    if (verbose)
+        std::cout << "[GeneticAgent] Gen" << generation
+                  << " | Best Score: " << genBest
+                  << " | Avg Score: " << avgScore
+                  << " | Avg Steps: " << avgSteps
+                  << " | Best Fitness: " << maxFitness
+                  << " | Avg Fitness: " << avgFitness
+                  << std::endl;
 
     std::vector<std::pair<double, size_t>> ranked;
     ranked.reserve(fitnessScores.size());
@@ -193,6 +200,23 @@ void GeneticAgent::evolve(std::vector<State> results) {
 
 std::optional<Direction> GeneticAgent::getAction(State state) {
     return GeneticGenome(population[0], components).getAction(state);
+}
+
+int GeneticAgent::atTrainingStart() {
+    return generation;
+}
+
+AgentSnapshot GeneticAgent::takeSnapshot() {
+    AgentSnapshot s;
+    if (intervalCount > 0) {
+        s.maxScore   = intervalMaxScore;
+        s.avgScore   = intervalScoreSum / intervalCount;
+        s.avgSteps   = intervalStepsSum / intervalCount;
+        s.avgFitness = intervalFitnessSum / intervalCount;
+    }
+    intervalMaxScore = intervalScoreSum = intervalStepsSum = intervalFitnessSum = 0.0;
+    intervalCount = 0;
+    return s;
 }
 
 void GeneticAgent::atTrainingEnd() {
@@ -294,8 +318,9 @@ void GeneticAgent::save(bool force) {
 
     registry.update(configId, generation, bestScoreEver);
 
-    std::cout << "[GeneticAgent] Checkpoint saved (config #" << configId
-              << ", gen " << generation << ").\n";
+    if (verbose)
+        std::cout << "[GeneticAgent] Checkpoint saved (config #" << configId
+                << ", gen " << generation << ").\n";
 }
 
 void GeneticAgent::load() {

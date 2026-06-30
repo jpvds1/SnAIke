@@ -38,13 +38,15 @@ static void printUsage(const std::vector<AgentEntry>& registry) {
 
     std::cout <<
         "  Training limits (at least on required):\n"
-        "    generations=<N>     stop after N generation\n"
+        "    generations=<N>     stop at generation N\n"
         "    time_minutes=<F>    stop after F minutes\n\n"
         "  Environment:\n"
         "    env_width=20\n"
         "    env_height=20\n\n"
         "  Parallelism:\n"
         "    workers=<N>         parallel evaluation workers (0 = auto)\n\n"
+        "  Logging:\n"
+        "    --verbose, -v       print per-generation logs (default off)\n\n"
         "  Example:\n"
         "    snake genetic generations=200 mutation_rate=0.15\n"
         "    snake genetic time_minutes=5 workers=8\n"
@@ -55,6 +57,10 @@ static void printUsage(const std::vector<AgentEntry>& registry) {
 static bool parseArgs(int argc, char* argv[], int startIdx, ParamMap& params, std::string& reason) {
     for (int i = startIdx; i < argc; i++) {
         std::string token(argv[i]);
+        if (token == "--verbose" || token == "-v") {
+            params["verbose"] = "true";
+            continue;
+        }
         auto eq = token.find("=");
         if (eq == std::string::npos) {
             reason = "malformed argument \"" + token + "\" (expected key=value)";
@@ -90,6 +96,10 @@ static TrainerConfig buildConfig(ParamMap& params) {
     }
     if (auto it = params.find("workers"); it != params.end()) {
         config.nWorkers = std::stoi(it->second);
+        params.erase(it);
+    }
+    if (auto it = params.find("verbose"); it != params.end()) {
+        config.verbose = (it->second == "true" || it->second == "1");
         params.erase(it);
     }
 

@@ -50,6 +50,8 @@ struct TrainerConfig {
 
     int nWorkers = 0;
 
+    bool verbose = false;
+
     int resolvedWorkers() const {
         if (nWorkers > 0) return nWorkers;
         unsigned int hw = std::thread::hardware_concurrency();

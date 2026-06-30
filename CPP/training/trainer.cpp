@@ -51,6 +51,35 @@ std::string GenerationStats::summary() const {
 }
 
 // ---------------------------------------------------------------------------
+// Milestone table
+// ---------------------------------------------------------------------------
+
+static bool isMilestone(int gen) {
+    if (gen <= 0)     return false;
+    if (gen <= 5000)  return gen % 1000 == 0;
+    if (gen <= 10000) return gen % 2500 == 0;
+    return gen % 5000 == 0;
+}
+
+static void printTableHeader() {
+    std::cout << "| Generation | Max Score | Average Score | Average Steps | Average Fitness | Elapsed Time | Elapsed Time / Generation |\n"
+              << "| ---------- | --------- | ------------- | ------------- | --------------- | ------------ | ------------------------- |\n";
+}
+
+static void printMilestoneRow(int gen, const AgentSnapshot& s, double dt, int dGen) {
+    std::ostringstream row;
+    row << std::fixed
+        << "| " << gen
+        << " | " << std::setprecision(0) << s.maxScore
+        << " | " << std::setprecision(2) << s.avgScore
+        << " | " << s.avgSteps
+        << " | " << s.avgFitness
+        << " | " << std::setprecision(1) << dt << "s"
+        << " | " << std::setprecision(4) << (dGen > 0 ? dt / dGen : 0.0) << "s |";
+    std::cout << row.str() << std::endl;
+}
+
+// ---------------------------------------------------------------------------
 // Trainer public
 // ---------------------------------------------------------------------------
 
@@ -68,7 +97,9 @@ Trainer::Trainer(Agent& agent, TrainerConfig config)
 std::vector<GenerationStats> Trainer::run() {
     stopRequested = false;
     history_.clear();
-    generation = 0;
+    agent.setVerbose(config.verbose);
+    generation = agent.atTrainingStart();
+    const int start_generation = generation;
 
     const int workers = config.resolvedWorkers();
     std::cout << "[Trainer] Starting - workers=" << workers;
@@ -76,18 +107,29 @@ std::vector<GenerationStats> Trainer::run() {
     if (config.timeLimitMinutes) std::cout << "  time_limit=" << *config.timeLimitMinutes << "min";
     std::cout << "\n";
 
+    printTableHeader();
+
     const TimePoint runStart = Clock::now();
+    TimePoint lastMilestone = runStart;
+    int lastMilestoneGen = generation;
 
     while (!shouldStop(runStart)) {
         GenerationStats stats = runGeneration(generation, runStart);
         history_.push_back(stats);
-        std::cout << stats.summary() << "\n"; 
+        if (config.verbose) std::cout << stats.summary() << "\n";
         generation++;
+
+        if (isMilestone(generation)) {
+            const double dt = std::chrono::duration<double>(Clock::now() - lastMilestone).count();
+            printMilestoneRow(generation, agent.takeSnapshot(), dt, generation - lastMilestoneGen);
+            lastMilestone = Clock::now();
+            lastMilestoneGen = generation;
+        }
     }
 
     const double totalElapsed = std::chrono::duration<double>(Clock::now() - runStart).count();
     std::cout << "[Trainer] Training complete.\n"
-              << "  generations trained: " << generation << "\n"
+              << "  generations trained: " << generation - start_generation << "\n"
               << "  elapsed time: " << std::fixed << std::setprecision(1) << totalElapsed << "s\n"
               << "  elapsed time / generation: " << std::setprecision(4)
               << (generation > 0 ? totalElapsed / generation : 0.0) << "s\n";

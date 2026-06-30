@@ -47,7 +47,9 @@ public:
     std::vector<std::unique_ptr<Genome>>& getPopulation() override;
     void evolve(std::vector<State> results) override;
     std::optional<Direction> getAction(State state) override;
+    int atTrainingStart() override;
     void atTrainingEnd() override;
+    AgentSnapshot takeSnapshot() override;
 
 private:
     int popSize;
@@ -67,6 +69,12 @@ private:
     double bestAvgScore = -1.0;
     double bestAvgScoreSteps = 0.0;
     double bestAvgScoreFitness = 0.0;
+
+    double intervalMaxScore = 0.0;
+    double intervalScoreSum = 0.0;
+    double intervalStepsSum = 0.0;
+    double intervalFitnessSum = 0.0;
+    int    intervalCount = 0;
 
     std::vector<NeuralNetwork> population;
     std::vector<std::unique_ptr<Genome>> genomePopulation;
