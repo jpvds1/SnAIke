@@ -148,6 +148,16 @@ static bool buildFromArgs(const std::vector<AgentEntry>& registry,
         if (!check(cur)) return false;
     }
 
+    if (auto it = params.find("fitness_function"); it != params.end()) {
+        const auto& defs = entry->fitnessFunctionDefs;
+        const bool valid = std::any_of(defs.begin(), defs.end(),
+            [&](const auto& d) { return d.first == it->second; });
+        if (!valid) {
+            reason = "unknown fitness function \"" + it->second + "\"";
+            return false;
+        }
+    }
+
     try {
         agent = entry->factory(params);
     } catch (const std::exception& e) {

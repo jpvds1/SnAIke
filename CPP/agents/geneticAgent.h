@@ -63,6 +63,7 @@ private:
 
     std::vector<std::string> components;
     std::vector<int> layerSizes;
+    std::string fitnessFunction;
     int generation;
     int bestScoreEver;
 
@@ -89,6 +90,9 @@ private:
 
     // Evolution
     double computeFitness(const State& results) const;
+    double computeFitnessScoreSteps(const State& result) const;
+    double computeFitnessSurvival(const State& result) const;
+    double computeFitnessEfficiency(const State& result) const;
     int tournamentSelect(const std::vector<std::pair<double, size_t>>& ranked);
     std::vector<double> crossover(const NeuralNetwork& p1, const NeuralNetwork& p2);
     std::vector<double> mutate(std::vector<double> weights);

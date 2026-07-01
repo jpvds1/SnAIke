@@ -22,6 +22,9 @@ struct AgentEntry {
 
     std::vector<std::pair<std::string, bool>> inputParamDefs;
 
+    std::vector<std::pair<std::string, std::string>> fitnessFunctionDefs;
+    std::string defaultFitnessFunction;
+
     std::function<std::unique_ptr<Agent>(const ParamMap&)> factory;
 };
 
@@ -70,6 +73,12 @@ inline std::vector<AgentEntry> makeRegistry() {
                 {"danger_flags",       false},
                 {"full_grid",          false}
             },
+            .fitnessFunctionDefs = {
+                {"score_steps", "Default - rewards apples eaten, penalizes slow food-seeking"},
+                {"survival",    "Survival - rewards steps survived, scaled by score"},
+                {"efficiency",  "Efficiency - strongly rewards apples eaten per step"}
+            },
+            .defaultFitnessFunction = "score_steps",
             .factory = [](const ParamMap& p) -> std::unique_ptr<Agent> {
                 return std::make_unique<GeneticAgent>("genetic", p);
             }

@@ -16,7 +16,8 @@ static std::map<std::string, std::string> defaultParams() {
         {"tournament_size",       "5"},
         {"save_interval",         "20"},
         {"hidden_layers",         "[16]"},
-        {"input_components",      "relative_apple,direction,snake_size,distance_to_walls,distance_to_danger"}
+        {"input_components",      "relative_apple,direction,snake_size,distance_to_walls,distance_to_danger"},
+        {"fitness_function",      "score_steps"}
     };
 }
 
@@ -84,6 +85,7 @@ GeneticAgent::GeneticAgent(std::string agentName, std::map<std::string, std::str
     saveInterval        = std::stoi(params.at("save_interval"));
 
     components = splitComponents(params.at("input_components"));
+    fitnessFunction = params.at("fitness_function");
 
     std::vector<int> hidden = jsonParseIntArray(params.at("hidden_layers"));
     if (hidden.empty()) hidden = {16};
@@ -241,10 +243,32 @@ void GeneticAgent::updateGenomePopulation() {
 }
 
 double GeneticAgent::computeFitness(const State& result) const {
+    if (fitnessFunction == "survival")   return computeFitnessSurvival(result);
+    if (fitnessFunction == "efficiency") return computeFitnessEfficiency(result);
+    return computeFitnessScoreSteps(result);
+}
+
+double GeneticAgent::computeFitnessScoreSteps(const State& result) const {
     const double score = result.score;
     const double steps = result.steps;
     const double avg_steps = steps / (score > 0 ? score : 1.0);
     const double fitness = score > 0 ? (score + 0.1) * (1000.0 - avg_steps) : avg_steps;
+    return (fitness > 0.1) ? fitness : 0.1;
+}
+
+double GeneticAgent::computeFitnessSurvival(const State& result) const {
+    const double score = result.score;
+    const double steps = result.steps;
+    const double fitness = steps * (1.0 + score);
+    return (fitness > 0.1) ? fitness : 0.1;
+}
+
+double GeneticAgent::computeFitnessEfficiency(const State& result) const {
+    const double score = result.score;
+    const double steps = result.steps;
+    if (score <= 0) return 0.1;
+    const double avg_steps = steps / score;
+    const double fitness = (score * score * 100.0) / avg_steps;
     return (fitness > 0.1) ? fitness : 0.1;
 }
 

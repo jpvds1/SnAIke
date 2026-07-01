@@ -29,7 +29,7 @@ static const AgentEntry& selectAgent(const std::vector<AgentEntry>& registry) {
         printSeparator();
         std::cout << "Available agents\n\n";
         for (int i = 0; i < registry.size(); i++) {
-            std::cout << " [" << (i + 1) << " ]" << registry[i].name
+            std::cout << " [" << (i + 1) << "] " << registry[i].name
                       << " - " << registry[i].description << "\n";
         }
         std::cout << "\nSelect  agent: ";
@@ -105,6 +105,30 @@ static std::string joinEnabled(const AgentEntry& entry, const std::vector<bool>&
 }
 
 // --------------------------------------------------------------------------------------
+// Fitness function selection
+// --------------------------------------------------------------------------------------
+
+static std::string selectFitnessFunction(const AgentEntry& entry, const std::string& current) {
+    while (true) {
+        printSeparator();
+        std::cout << "Fitness function (current: " << current << ")\n\n";
+        for (size_t i = 0; i < entry.fitnessFunctionDefs.size(); i++) {
+            const auto& [id, desc] = entry.fitnessFunctionDefs[i];
+            std::cout << "  [" << (i + 1) << "] " << id
+                      << (id == current ? " (selected)" : "") << " - " << desc << "\n";
+        }
+        std::cout << "\n  [0] Back\n\nChoice: ";
+        int c;
+        if (!(std::cin >> c)) { clearInput(); continue; }
+        clearInput();
+        if (c == 0) return current;
+        if (c >= 1 && c <= (int)entry.fitnessFunctionDefs.size())
+            return entry.fitnessFunctionDefs[c - 1].first;
+        std::cout << "  Invalid choice, try again.\n";
+    }
+}
+
+// --------------------------------------------------------------------------------------
 // New / previous configuration
 // --------------------------------------------------------------------------------------
 
@@ -115,27 +139,44 @@ static ParamMap buildNewConfig(const AgentEntry& entry) {
     std::vector<bool> enabled;
     for (const auto& [name, def] : entry.inputParamDefs) enabled.push_back(def);
 
+    std::string fitnessFunction = entry.defaultFitnessFunction;
+
+    const bool hasHyperparams   = !entry.paramDefs.empty();
+    const bool hasInputParams   = !entry.inputParamDefs.empty();
+    const bool hasFitnessChoice = !entry.fitnessFunctionDefs.empty();
+
     while (true) {
         printSeparator();
-        std::cout << "New configuration\n\n"
-                  << "  [1] Modify input parameters\n"
-                  << "  [2] Modify hyperparameters\n"
-                  << "  [3] Done\n\nChoice: ";
+        std::cout << "New configuration\n\n";
+
+        int idx = 1;
+        int inputOpt = -1, hyperOpt = -1, fitnessOpt = -1;
+        if (hasInputParams)   { std::cout << "  [" << idx << "] Modify input parameters\n"; inputOpt = idx++; }
+        if (hasHyperparams)   { std::cout << "  [" << idx << "] Modify hyperparameters\n"; hyperOpt = idx++; }
+        if (hasFitnessChoice) { std::cout << "  [" << idx << "] Select fitness function\n"; fitnessOpt = idx++; }
+        const int doneOpt = idx;
+        std::cout << "  [" << doneOpt << "] Done\n\nChoice: ";
+
         int c;
         if (!(std::cin >> c)) { clearInput(); continue; }
         clearInput();
 
-        if (c == 1) {
+        if (hasInputParams && c == inputOpt) {
             toggleInputs(entry, enabled);
-        } else if (c == 2) {
+        } else if (hasHyperparams && c == hyperOpt) {
             editHyperparams(entry, params);
-        } else if (c == 3) {
-            std::string comp = joinEnabled(entry, enabled);
-            if (comp.empty()) {
-                std::cout << "  Select at least one input parameter.\n";
-                continue;
+        } else if (hasFitnessChoice && c == fitnessOpt) {
+            fitnessFunction = selectFitnessFunction(entry, fitnessFunction);
+        } else if (c == doneOpt) {
+            if (hasInputParams) {
+                std::string comp = joinEnabled(entry, enabled);
+                if (comp.empty()) {
+                    std::cout << "  Select at least one input parameter.\n";
+                    continue;
+                }
+                params["input_components"] = comp;
             }
-            params["input_components"] = comp;
+            if (hasFitnessChoice) params["fitness_function"] = fitnessFunction;
             return params;
         }
     }
